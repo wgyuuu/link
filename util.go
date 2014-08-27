@@ -1,20 +1,20 @@
 package link
 
 import (
+	"bufio"
 	"net"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
 var dialSessionId uint64
 
 // The easy way to setup a server.
-func ListenAndServe(network, address string, protocol PacketProtocol) (*Server, error) {
+func Listen(network, address string, protocol PacketProtocol) (*Server, error) {
 	listener, err := net.Listen(network, address)
 	if err != nil {
 		return nil, err
 	}
-
 	return NewServer(listener, protocol), nil
 }
 
@@ -24,11 +24,8 @@ func Dial(network, address string, protocol PacketProtocol) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	dialSessionId += 1
-
-	session := NewSession(dialSessionId, conn, protocol, DefaultSendChanSize)
-
+	id := atomic.AddUint64(&dialSessionId, 1)
+	session := NewSession(id, conn, protocol, DefaultSendChanSize, DefaultReadBufferSize)
 	return session, nil
 }
 
@@ -38,11 +35,8 @@ func DialTimeout(network, address string, timeout time.Duration, protocol Packet
 	if err != nil {
 		return nil, err
 	}
-
-	dialSessionId += 1
-
-	session := NewSession(dialSessionId, conn, protocol, DefaultSendChanSize)
-
+	id := atomic.AddUint64(&dialSessionId, 1)
+	session := NewSession(id, conn, protocol, DefaultSendChanSize, DefaultReadBufferSize)
 	return session, nil
 }
 
@@ -50,18 +44,7 @@ func DialTimeout(network, address string, timeout time.Duration, protocol Packet
 // It's simple way to make your custome protocol implement Settings interface.
 // See FixWriter and FixReader.
 type SimpleSettings struct {
-	timeout time.Duration
 	maxsize uint
-}
-
-// Get timeout setting.
-func (s *SimpleSettings) GetTimeout() time.Duration {
-	return s.timeout
-}
-
-// Set timeout.
-func (s *SimpleSettings) SetTimeout(timeout time.Duration) {
-	s.timeout = timeout
 }
 
 // Get packet size limit
@@ -75,15 +58,15 @@ func (s *SimpleSettings) SetMaxSize(maxsize uint) {
 }
 
 // A simple send queue. Can used for buffered send.
-// For example, sometimes you have many Send() call during a request processing.
-// You can use the send queue to buffer those messages then call Send() once after request processing done.
-// The send queue type implemented Message interface. So you can pass it as the Send() method argument.
+// For example, sometimes you have many Session.Send() call during a request processing.
+// You can use the send queue to buffer those messages then call Session.Send() once after request processing done.
+// The send queue type implemented Message interface. So you can pass it as the Session.Send() method argument.
 type SendQueue struct {
 	messages []Message
 }
 
 // Push a message into send queue but not send it immediately.
-func (q *SendQueue) Send(message Message) {
+func (q *SendQueue) Push(message Message) {
 	q.messages = append(q.messages, message)
 }
 
@@ -107,8 +90,6 @@ func (q *SendQueue) AppendToPacket(packet []byte) []byte {
 // A broadcast sender. The broadcast message only encoded once
 // so the performance it's better then send message one by one.
 type Broadcaster struct {
-	mutex  sync.RWMutex
-	buff   []byte
 	writer PacketWriter
 }
 
@@ -127,18 +108,42 @@ func (server *Server) NewBroadcaster() *Broadcaster {
 // Broadcast to sessions. The message only encoded once
 // so the performance it's better then send message one by one.
 func (b *Broadcaster) Broadcast(sessions SessionCollection, message Message) {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-
 	size := message.RecommendPacketSize()
-
-	packet := b.writer.BeginPacket(size, b.buff)
+	packet := b.writer.BeginPacket(size, nil)
 	packet = message.AppendToPacket(packet)
 	packet = b.writer.EndPacket(packet)
 
-	b.buff = packet
+	sessions.Fetch(func(session *Session) {
+		session.TrySendPacket(packet, 0)
+	})
+}
+
+// Broadcast to sessions. The message only encoded once
+// so the performance it's better then send message one by one.
+func (b *Broadcaster) MustBroadcast(sessions SessionCollection, message Message) {
+	size := message.RecommendPacketSize()
+	packet := b.writer.BeginPacket(size, nil)
+	packet = message.AppendToPacket(packet)
+	packet = b.writer.EndPacket(packet)
 
 	sessions.Fetch(func(session *Session) {
 		session.SendPacket(packet)
 	})
+}
+
+// Buffered connection.
+type BufferConn struct {
+	net.Conn
+	reader *bufio.Reader
+}
+
+func NewBufferConn(conn net.Conn, size int) *BufferConn {
+	return &BufferConn{
+		conn,
+		bufio.NewReaderSize(conn, size),
+	}
+}
+
+func (conn *BufferConn) Read(d []byte) (int, error) {
+	return conn.reader.Read(d)
 }

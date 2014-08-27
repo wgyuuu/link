@@ -4,12 +4,11 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
-	"time"
 )
 
 // The packet spliting protocol like Erlang's {packet, N}.
 // Each packet has a fix length packet header to present packet length.
-type FixProtocol struct {
+type PNProtocol struct {
 	n  uint
 	bo binary.ByteOrder
 }
@@ -17,25 +16,25 @@ type FixProtocol struct {
 // Create a {packet, N} protocol.
 // The n means how many bytes of the packet header.
 // The 'bo' used to define packet header's byte order.
-func NewFixProtocol(n uint, bo binary.ByteOrder) *FixProtocol {
-	return &FixProtocol{
+func PacketN(n uint, bo binary.ByteOrder) *PNProtocol {
+	return &PNProtocol{
 		n:  n,
 		bo: bo,
 	}
 }
 
 // Create a packet writer.
-func (p FixProtocol) NewWriter() PacketWriter {
-	return NewFixWriter(p.n, p.bo)
+func (p PNProtocol) NewWriter() PacketWriter {
+	return NewPNWriter(p.n, p.bo)
 }
 
 // Create a packet reader.
-func (p FixProtocol) NewReader() PacketReader {
-	return NewFixReader(p.n, p.bo)
+func (p PNProtocol) NewReader() PacketReader {
+	return NewPNReader(p.n, p.bo)
 }
 
 // The {packet, N} writer.
-type FixWriter struct {
+type PNWriter struct {
 	SimpleSettings
 	n  uint
 	bo binary.ByteOrder
@@ -44,8 +43,8 @@ type FixWriter struct {
 // Create a new instance of {packet, N} writer.
 // The n means how many bytes of the packet header.
 // The 'bo' used to define packet header's byte order.
-func NewFixWriter(n uint, bo binary.ByteOrder) *FixWriter {
-	return &FixWriter{
+func NewPNWriter(n uint, bo binary.ByteOrder) *PNWriter {
+	return &PNWriter{
 		n:  n,
 		bo: bo,
 	}
@@ -54,7 +53,7 @@ func NewFixWriter(n uint, bo binary.ByteOrder) *FixWriter {
 // Begin a packet writing on the buff.
 // If the size large than the buff capacity, the buff will be dropped and a new buffer will be created.
 // This method give the session a way to reuse buffer and avoid invoke Conn.Writer() twice.
-func (w *FixWriter) BeginPacket(size uint, buff []byte) []byte {
+func (w *PNWriter) BeginPacket(size uint, buff []byte) []byte {
 	packetLen := w.n + size
 	if uint(cap(buff)) < packetLen {
 		return make([]byte, w.n, packetLen)
@@ -64,7 +63,7 @@ func (w *FixWriter) BeginPacket(size uint, buff []byte) []byte {
 
 // Finish a packet writing.
 // Give the protocol writer a chance to set packet head data after packet body writed.
-func (w *FixWriter) EndPacket(packet []byte) []byte {
+func (w *PNWriter) EndPacket(packet []byte) []byte {
 	size := uint(len(packet)) - w.n
 
 	if w.maxsize > 0 && size > w.maxsize {
@@ -88,22 +87,15 @@ func (w *FixWriter) EndPacket(packet []byte) []byte {
 }
 
 // Write a packet to the conn.
-func (w *FixWriter) WritePacket(conn net.Conn, packet []byte) error {
-	if w.timeout > 0 {
-		conn.SetWriteDeadline(time.Now().Add(w.timeout))
-	} else {
-		conn.SetWriteDeadline(time.Time{})
-	}
-
+func (w *PNWriter) WritePacket(conn net.Conn, packet []byte) error {
 	if _, err := conn.Write(packet); err != nil {
 		return err
 	}
-
 	return nil
 }
 
 // The {packet, N} reader.
-type FixReader struct {
+type PNReader struct {
 	SimpleSettings
 	n    uint
 	bo   binary.ByteOrder
@@ -113,8 +105,8 @@ type FixReader struct {
 // Create a new instance of {packet, N} reader.
 // The n means how many bytes of the packet header.
 // The 'bo' used to define packet header's byte order.
-func NewFixReader(n uint, bo binary.ByteOrder) *FixReader {
-	return &FixReader{
+func NewPNReader(n uint, bo binary.ByteOrder) *PNReader {
+	return &PNReader{
 		n:    n,
 		bo:   bo,
 		head: make([]byte, n),
@@ -122,11 +114,7 @@ func NewFixReader(n uint, bo binary.ByteOrder) *FixReader {
 }
 
 // Read a packet from conn.
-func (r *FixReader) ReadPacket(conn net.Conn, b []byte) ([]byte, error) {
-	if r.timeout > 0 {
-		conn.SetReadDeadline(time.Now().Add(r.timeout))
-	}
-
+func (r *PNReader) ReadPacket(conn net.Conn, b []byte) ([]byte, error) {
 	if _, err := io.ReadFull(conn, r.head); err != nil {
 		return nil, err
 	}
@@ -162,11 +150,10 @@ func (r *FixReader) ReadPacket(conn net.Conn, b []byte) ([]byte, error) {
 		return data, nil
 	}
 
-	if r.timeout > 0 {
-		conn.SetReadDeadline(time.Now().Add(r.timeout))
+	_, err := io.ReadFull(conn, data)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := io.ReadFull(conn, data)
-
-	return data, err
+	return data, nil
 }

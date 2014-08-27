@@ -3,134 +3,141 @@ package link
 import (
 	"bytes"
 	"encoding/binary"
+	"runtime/pprof"
+	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 type TestMessage struct {
 	Message []byte
 }
 
-func (msg *TestMessage) RecommendPacketSize() uint {
+func (msg TestMessage) RecommendPacketSize() uint {
 	return uint(len(msg.Message))
 }
 
-func (msg *TestMessage) AppendToPacket(packet []byte) []byte {
+func (msg TestMessage) AppendToPacket(packet []byte) []byte {
 	return append(packet, msg.Message...)
 }
 
 func Test_Server(t *testing.T) {
-	proto := NewFixProtocol(4, binary.BigEndian)
+	proto := PacketN(4, binary.BigEndian)
 
-	server, err0 := ListenAndServe("tcp", "0.0.0.0:0", proto)
+	server, err0 := Listen("tcp", "0.0.0.0:0", proto)
 	if err0 != nil {
 		t.Fatalf("Setup server failed, Error = %v", err0)
 	}
-	addr := server.Listener().Addr().String()
-	t.Logf("Server: %v", addr)
 
 	var (
-		sessionStartCount  int32
-		sessionCloseCount  int32
-		sessionMatchFailed bool
-		messageCount       int32
-		messageMatchFailed bool
-		message            = &TestMessage{[]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}}
-		serverStopChan     = make(chan int)
+		addr    = server.Listener().Addr().String()
+		message = TestMessage{[]byte{0, 1, 2, 3, 4, 45, 6, 7, 8, 9}}
+
+		sessionStart   sync.WaitGroup
+		sessionClose   sync.WaitGroup
+		sessionRequest sync.WaitGroup
+
+		sessionStartCount   int32
+		sessionRequestCount int32
+		sessionCloseCount   int32
+		messageMatchFailed  bool
 	)
 
 	go func() {
-		server.Handle(func(session1 *Session) {
-			t.Log("Session start")
+		server.AcceptLoop(func(session *Session) {
 			atomic.AddInt32(&sessionStartCount, 1)
+			sessionStart.Done()
 
-			session1.OnMessage(func(session2 *Session, msg []byte) {
-				atomic.AddInt32(&messageCount, 1)
-				if session1 != session2 {
-					sessionMatchFailed = true
-				}
+			session.ReadLoop(func(msg []byte) {
 				if !bytes.Equal(msg, message.Message) {
 					messageMatchFailed = true
-					t.Logf("message: %v", msg)
 				}
+
+				atomic.AddInt32(&sessionRequestCount, 1)
+				sessionRequest.Done()
 			})
 
-			session1.OnClose(func(session *Session, reason error) {
-				t.Log("Session close")
-				atomic.AddInt32(&sessionCloseCount, 1)
-			})
-
-			session1.Start()
+			atomic.AddInt32(&sessionCloseCount, 1)
+			sessionClose.Done()
 		})
-		close(serverStopChan)
 	}()
 
+	// test session start
+	sessionStart.Add(1)
 	client1, err1 := Dial("tcp", addr, proto)
 	if err1 != nil {
 		t.Fatal("Create client1 failed, Error = %v", err1)
 	}
-	client1.OnClose(func(*Session, error) {
-		t.Log("Client 1 close callback")
-	})
-	client1.Start()
 
+	sessionStart.Add(1)
 	client2, err2 := Dial("tcp", addr, proto)
 	if err2 != nil {
 		t.Fatal("Create client2 failed, Error = %v", err2)
 	}
-	client2.OnClose(func(*Session, error) {
-		t.Log("Client 2 close callback")
-	})
-	client2.Start()
 
-	t.Log("Send 1")
-	if err := client1.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
-
-	t.Log("Send 2")
-	if err := client2.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
-
-	t.Log("Send 3")
-	if err := client1.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
-
-	t.Log("Send 4")
-	if err := client2.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
-
-	// close by manual
-	t.Log("Close client1")
-	client1.Close(nil)
-	time.Sleep(time.Second)
-
-	t.Log("Stop server")
-	server.Stop()
-	<-serverStopChan
-
+	t.Log("check session start")
+	sessionStart.Wait()
 	if sessionStartCount != 2 {
-		t.Fatal("Session start count not match")
+		t.Fatal("session start count != 2")
 	}
 
-	if sessionCloseCount != 2 {
-		t.Fatal("Session close count not match")
+	// test session request
+	sessionRequest.Add(1)
+	if err := client1.Send(message); err != nil {
+		t.Fatal("Send message failed, Error = %v", err)
 	}
 
-	if sessionMatchFailed {
-		t.Fatal("Session match failed")
+	sessionRequest.Add(1)
+	if err := client2.Send(message); err != nil {
+		t.Fatal("Send message failed, Error = %v", err)
 	}
 
-	if messageCount != 4 {
-		t.Logf("Message count: %d", messageCount)
-		t.Fatal("Message count not match")
+	sessionRequest.Add(1)
+	if err := client1.Send(message); err != nil {
+		t.Fatal("Send message failed, Error = %v", err)
+	}
+
+	sessionRequest.Add(1)
+	if err := client2.Send(message); err != nil {
+		t.Fatal("Send message failed, Error = %v", err)
+	}
+
+	t.Log("check session request")
+	sessionRequest.Wait()
+	if sessionRequestCount != 4 {
+		t.Fatal("session request count != 4")
 	}
 
 	if messageMatchFailed {
 		t.Fatal("Message match failed")
+	}
+
+	// test session close
+	sessionClose.Add(1)
+	client1.Close(nil)
+
+	sessionClose.Add(1)
+	client2.Close(nil)
+
+	t.Log("check session close")
+	sessionClose.Wait()
+	if sessionCloseCount != 2 {
+		t.Fatal("session close count != 2")
+	}
+
+	MakeSureSessionGoroutineExit(t)
+}
+
+func MakeSureSessionGoroutineExit(t *testing.T) {
+	buff := new(bytes.Buffer)
+	goroutines := pprof.Lookup("goroutine")
+
+	if err := goroutines.WriteTo(buff, 2); err != nil {
+		t.Fatalf("Dump goroutine failed: %v", err)
+	}
+
+	if n := bytes.Index(buff.Bytes(), []byte("sendLoop")); n >= 0 {
+		t.Log(buff.String())
+		t.Fatalf("Some session goroutine running")
 	}
 }

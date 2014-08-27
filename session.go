@@ -4,10 +4,10 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type SessionAble interface {
-	Start()
 	Id() uint64
 	Conn() net.Conn
 	IsClosed() bool
@@ -32,23 +32,26 @@ type Session struct {
 	// About send and receive
 	sendChan       chan Message
 	sendPacketChan chan []byte
+	readBuff       []byte
 	sendBuff       []byte
-	sendLock       sync.Mutex
-	messageHandler MessageHandler
+	sendMutex      sync.Mutex
 
 	// About session close
-	closeChan     chan int
-	closeWait     *sync.WaitGroup
-	closeFlag     int32
-	closeCallback func(*Session, error)
+	closeChan   chan int
+	closeFlag   int32
+	closeReason interface{}
 
 	// Put your session state here.
 	State interface{}
 }
 
 // Create a new session instance.
-func NewSession(id uint64, conn net.Conn, protocol PacketProtocol, sendChanSize uint) *Session {
-	return &Session{
+func NewSession(id uint64, conn net.Conn, protocol PacketProtocol, sendChanSize uint, readBufferSize int) *Session {
+	if readBufferSize > 0 {
+		conn = NewBufferConn(conn, readBufferSize)
+	}
+
+	session := &Session{
 		id:             id,
 		conn:           conn,
 		writer:         protocol.NewWriter(),
@@ -56,9 +59,18 @@ func NewSession(id uint64, conn net.Conn, protocol PacketProtocol, sendChanSize 
 		sendChan:       make(chan Message, sendChanSize),
 		sendPacketChan: make(chan []byte, sendChanSize),
 		closeChan:      make(chan int),
-		closeWait:      new(sync.WaitGroup),
-		closeFlag:      -1,
 	}
+
+	go session.sendLoop()
+
+	return session
+}
+
+func (server *Server) newSession(id uint64, conn net.Conn) *Session {
+	session := NewSession(id, conn, server.protocol, server.sendChanSize, server.readBufferSize)
+	session.server = server
+	session.server.putSession(session)
+	return session
 }
 
 type MockSession struct {
@@ -97,62 +109,22 @@ func (Session *MockSession)	SendPacket(packet []byte) error{
 	return nil
 }
 
-// Start the session's read write goroutines.
-// NOTE: A session always need to started before you use it.
-func (session *Session) Start() {
-	if atomic.CompareAndSwapInt32(&session.closeFlag, -1, 0) {
-		session.closeWait.Add(1)
-		go session.writeLoop()
-
-		session.closeWait.Add(1)
-		go session.readLoop()
-	} else {
-		panic(SessionDuplicateStartError)
-	}
-}
-
-// Loop and wait incoming requests.
-func (session *Session) readLoop() {
-	defer func() {
-		session.closeWait.Done()
-		session.Close(nil)
-	}()
-
-	var (
-		packet []byte
-		err    error
-	)
-
-	for {
-		packet, err = session.reader.ReadPacket(session.conn, packet)
-		if err != nil {
-			break
-		}
-		if session.messageHandler != nil {
-			session.messageHandler.Handle(session, packet)
-		}
-	}
-}
-
 // Loop and transport responses.
-func (session *Session) writeLoop() {
-	defer func() {
-		session.closeWait.Done()
-		session.Close(nil)
-	}()
-L:
+func (session *Session) sendLoop() {
 	for {
 		select {
 		case message := <-session.sendChan:
-			if err := session.SyncSend(message); err != nil {
-				break L
+			if err := session.Send(message); err != nil {
+				session.Close(err)
+				return
 			}
 		case packet := <-session.sendPacketChan:
-			if err := session.SyncSendPacket(packet); err != nil {
-				break L
+			if err := session.SendPacket(packet); err != nil {
+				session.Close(err)
+				return
 			}
 		case <-session.closeChan:
-			break L
+			return
 		}
 	}
 }
@@ -187,117 +159,131 @@ func (session *Session) IsClosed() bool {
 	return atomic.LoadInt32(&session.closeFlag) != 0
 }
 
-// Set message handler function. A easy way to handle messages.
-func (session *Session) OnMessage(callback func(*Session, []byte)) {
-	session.messageHandler = messageHandlerFunc{callback}
-}
-
-// Set message handler. A complex but more powerful way to handle messages.
-func (session *Session) SetMessageHandler(handler MessageHandler) {
-	session.messageHandler = handler
-}
-
-// Set session close callback.
-func (session *Session) OnClose(callback func(*Session, error)) {
-	session.closeCallback = callback
+// Get session close reason.
+func (session *Session) CloseReason() interface{} {
+	return session.closeReason
 }
 
 // Close session and remove it from api server.
-func (session *Session) Close(reason error) {
+func (session *Session) Close(reason interface{}) {
 	if atomic.CompareAndSwapInt32(&session.closeFlag, 0, 1) {
-		// if close session without this goroutine
-		// deadlock will happen when session close itself.
-		go func() {
-			session.conn.Close()
+		session.closeReason = reason
 
-			// notify write loop session closed
-			close(session.closeChan)
+		session.conn.Close()
 
-			// wait for read loop and write lopp exit
-			session.closeWait.Wait()
+		// exit send loop and cancel async send
+		close(session.closeChan)
 
-			// if this is a server side session
-			// remove it from sessin list
-			if session.server != nil {
-				session.server.delSession(session)
-			}
-
-			// trigger the session close event
-			if session.closeCallback != nil {
-				session.closeCallback(session, reason)
-			}
-		}()
+		// if this is a server side session
+		// remove it from sessin list
+		if session.server != nil {
+			session.server.delSession(session)
+		}
 	}
+}
+
+// Loop and read message. NOTE: The callback argument point to internal read buffer.
+func (session *Session) ReadLoop(handler func([]byte)) {
+	for {
+		msg, err := session.Read()
+		if err != nil {
+			session.Close(err)
+			break
+		}
+		handler(msg)
+	}
+}
+
+// Read message once. NOTE: The result of byte slice point to internal read buffer.
+// If you want to read from a session in multi-thread situation,
+// you need to lock the session and copy the result by yourself.
+func (session *Session) Read() ([]byte, error) {
+	var err error
+	session.readBuff, err = session.reader.ReadPacket(session.conn, session.readBuff)
+	if err != nil {
+		return nil, err
+	}
+	return session.readBuff, nil
+}
+
+// Packet a message.
+func (session *Session) Packet(message Message, buff []byte) []byte {
+	size := message.RecommendPacketSize()
+	packet := session.writer.BeginPacket(size, buff)
+	packet = message.AppendToPacket(packet)
+	packet = session.writer.EndPacket(packet)
+	return packet
 }
 
 // Sync send a message. This method will block on IO.
-// Use in carefully.
-func (session *Session) SyncSend(message Message) error {
-	session.sendLock.Lock()
-	defer session.sendLock.Unlock()
+func (session *Session) Send(message Message) error {
+	session.sendMutex.Lock()
+	defer session.sendMutex.Unlock()
 
-	size := message.RecommendPacketSize()
-
-	packet := session.writer.BeginPacket(size, session.sendBuff)
-	packet = message.AppendToPacket(packet)
-	packet = session.writer.EndPacket(packet)
-
-	session.sendBuff = packet
-
-	err := session.writer.WritePacket(session.conn, packet)
-	if err != nil {
-		session.Close(err)
-	}
-
-	return err
+	session.sendBuff = session.Packet(message, session.sendBuff)
+	return session.writer.WritePacket(session.conn, session.sendBuff)
 }
 
-// Sync send a packet. Use in carefully.
-// The packet must be properly formatted.
-// If you didn't know what it means, please see Channel.Broadcast().
-// Use in carefully.
-func (session *Session) SyncSendPacket(packet []byte) error {
-	session.sendLock.Lock()
-	defer session.sendLock.Unlock()
-
-	err := session.writer.WritePacket(session.conn, packet)
-	if err != nil {
-		session.Close(err)
-	}
-
-	return err
+// Sync send a packet. The packet must be properly formatted.
+// Please see Session.Packet().
+func (session *Session) SendPacket(packet []byte) error {
+	return session.writer.WritePacket(session.conn, packet)
 }
 
 // Async send a message. This method will never block.
-// If channel blocked session will be closed.
-func (session *Session) Send(message Message) error {
+// If blocking happens, this method returns BlockingError.
+func (session *Session) TrySend(message Message, timeout time.Duration) error {
 	if session.IsClosed() {
 		return SendToClosedError
 	}
 
-	select {
-	case session.sendChan <- message:
-		return nil
-	default:
-		session.Close(BlockingError)
-		return BlockingError
+	if timeout == 0 {
+		select {
+		case session.sendChan <- message:
+		case <-session.closeChan:
+			return SendToClosedError
+		default:
+			return BlockingError
+		}
+	} else {
+		select {
+		case session.sendChan <- message:
+		case <-session.closeChan:
+			return SendToClosedError
+		case <-time.After(timeout):
+			return BlockingError
+		}
 	}
+
+	return nil
 }
 
-// Async send a packet. This method will block on IO.
+// Try send a message. This method will never block.
+// If blocking happens, this method returns BlockingError.
 // The packet must be properly formatted.
-// If you didn't know what it means, please see Channel.Broadcast().
-// Use in carefully.
-func (session *Session) SendPacket(packet []byte) error {
+// Please see Session.Packet().
+func (session *Session) TrySendPacket(packet []byte, timeout time.Duration) error {
 	if session.IsClosed() {
 		return SendToClosedError
 	}
 
-	select {
-	case session.sendPacketChan <- packet:
-		return nil
-	default:
-		session.Close(BlockingError)
-		return BlockingError
+	if timeout == 0 {
+		select {
+		case session.sendPacketChan <- packet:
+		case <-session.closeChan:
+			return SendToClosedError
+		default:
+			return BlockingError
+		}
+	} else {
+		select {
+		case session.sendPacketChan <- packet:
+		case <-session.closeChan:
+			return SendToClosedError
+		case <-time.After(timeout):
+			return BlockingError
+		}
 	}
+
+	return nil
 }
