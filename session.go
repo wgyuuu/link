@@ -12,8 +12,6 @@ type SessionAble interface {
 	Conn() net.Conn
 	IsClosed() bool
 
-	SyncSendPacket(packet []byte) error
-
 	Send(message Message) error
 
 	SendPacket(packet []byte) error
