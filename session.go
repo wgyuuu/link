@@ -33,6 +33,7 @@ type Session struct {
 	readBuff       []byte
 	sendBuff       []byte
 	sendMutex      sync.Mutex
+	OnSendFailed   func(*Session, error)
 
 	// About session close
 	closeChan   chan int
@@ -113,12 +114,20 @@ func (session *Session) sendLoop() {
 		select {
 		case message := <-session.sendChan:
 			if err := session.Send(message); err != nil {
-				session.Close(err)
+				if session.OnSendFailed != nil {
+					session.OnSendFailed(session, err)
+				} else {
+					session.Close(err)
+				}
 				return
 			}
 		case packet := <-session.sendPacketChan:
 			if err := session.SendPacket(packet); err != nil {
-				session.Close(err)
+				if session.OnSendFailed != nil {
+					session.OnSendFailed(session, err)
+				} else {
+					session.Close(err)
+				}
 				return
 			}
 		case <-session.closeChan:
@@ -205,20 +214,25 @@ func (session *Session) Read() ([]byte, error) {
 }
 
 // Packet a message.
-func (session *Session) Packet(message Message, buff []byte) []byte {
+func (session *Session) Packet(message Message, buff []byte) (packet []byte, err error) {
 	size := message.RecommendPacketSize()
-	packet := session.writer.BeginPacket(size, buff)
-	packet = message.AppendToPacket(packet)
+	packet = session.writer.BeginPacket(size, buff)
+	packet, err = message.AppendToPacket(packet)
+	if err != nil {
+		return nil, err
+	}
 	packet = session.writer.EndPacket(packet)
-	return packet
+	return
 }
 
 // Sync send a message. This method will block on IO.
-func (session *Session) Send(message Message) error {
+func (session *Session) Send(message Message) (err error) {
 	session.sendMutex.Lock()
 	defer session.sendMutex.Unlock()
-
-	session.sendBuff = session.Packet(message, session.sendBuff)
+	session.sendBuff, err = session.Packet(message, session.sendBuff)
+	if err != nil {
+		return err
+	}
 	return session.writer.WritePacket(session.conn, session.sendBuff)
 }
 
