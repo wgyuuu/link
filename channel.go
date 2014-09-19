@@ -16,9 +16,9 @@ type channelSession struct {
 }
 
 // Create a channel instance.
-func (server *Server) NewChannel() *Channel {
+func NewChannel(protocol PacketProtocol) *Channel {
 	return &Channel{
-		broadcaster: server.NewBroadcaster(),
+		broadcaster: NewBroadcaster(protocol),
 		sessions:    make(map[uint64]channelSession),
 	}
 }
