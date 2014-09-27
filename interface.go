@@ -1,5 +1,7 @@
 package link
 
+import "net"
+
 type SessionAble interface {
 	Id() uint64
 	Conn() net.Conn
@@ -8,5 +10,6 @@ type SessionAble interface {
 	Send(message Message) error
 
 	SendPacket(packet []byte) error
-}
 
+	Close(reason interface{})
+}
