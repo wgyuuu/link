@@ -3,7 +3,10 @@ package link
 import (
 	"encoding/binary"
 	"io"
+	"log"
 	"net"
+
+	//log "github.com/cihub/seelog"
 )
 
 // The packet spliting protocol like Erlang's {packet, N}.
@@ -140,6 +143,10 @@ func (r *PNReader) ReadPacket(conn net.Conn, buff []byte) ([]byte, error) {
 
 	var data []byte
 
+	if size >= 5725856 { //大概50MB内存
+		log.Println("try to allocate too much memroy, r.n is ", r.n, " r.head is ", r.head, " size is ", size)
+		return data, nil
+	}
 	if uint(cap(buff)) >= size {
 		data = buff[0:size]
 	} else {

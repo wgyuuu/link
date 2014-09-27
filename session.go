@@ -158,7 +158,9 @@ func (session *Session) ReadLoop(handler func([]byte)) {
 			session.Close(err)
 			break
 		}
-		handler(msg)
+		if msg != nil && len(msg) > 0 {
+			handler(msg)
+		}
 	}
 }
 
