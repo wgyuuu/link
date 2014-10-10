@@ -39,3 +39,6 @@ func (Session *MockSession) Send(message Message) error {
 func (Session *MockSession) SendPacket(packet []byte) error {
 	return nil
 }
+
+func (session *MockSession) Close(reason interface{}) {
+}
