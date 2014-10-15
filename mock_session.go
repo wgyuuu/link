@@ -37,8 +37,14 @@ func (Session *MockSession) Send(message Message) error {
 }
 
 func (Session *MockSession) SendPacket(packet []byte) error {
+	Session.sendPacketChan <- packet
 	return nil
 }
 
 func (session *MockSession) Close(reason interface{}) {
+}
+
+func (session *MockSession) Read() ([]byte, error) {
+	bytes := <-session.sendPacketChan
+	return bytes, nil
 }

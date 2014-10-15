@@ -11,5 +11,7 @@ type SessionAble interface {
 
 	SendPacket(packet []byte) error
 
+	Read() ([]byte, error)
+
 	Close(reason interface{})
 }
