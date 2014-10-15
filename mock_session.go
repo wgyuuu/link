@@ -1,43 +1,92 @@
 package link
 
 import (
+	"fmt"
 	"net"
+	"time"
 )
 
 type MockSession struct {
-	id             uint64
+	id       uint64
+	mockConn MockConn
+}
+
+type MockConn struct {
 	sendPacketChan chan []byte
 }
 
-func NewMockSession() *MockSession {
-	return &MockSession{}
+func (this MockConn) RemoteAddr() net.Addr {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return addrs[1]
 }
 
-func (Session *MockSession) Start() {
+func (this MockConn) Read(b []byte) (n int, err error) {
+	return 0, nil
 }
 
-func (Session *MockSession) Id() uint64 {
-	return Session.id
+func (this MockConn) Write(b []byte) (n int, err error) {
+	return 0, nil
 }
 
-func (Session *MockSession) Conn() net.Conn {
+func (this MockConn) Close() error {
 	return nil
 }
 
-func (Session *MockSession) IsClosed() bool {
+func (this MockConn) LocalAddr() net.Addr {
+	return this.RemoteAddr()
+}
+
+func (this MockConn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (this MockConn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (this MockConn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+func NewMockSession() *MockSession {
+	bytesChan := make(chan []byte, 100)
+	mockConn := MockConn{
+		sendPacketChan: bytesChan,
+	}
+	return &MockSession{
+		mockConn: mockConn,
+	}
+}
+
+func (session *MockSession) Start() {
+}
+
+func (session *MockSession) Id() uint64 {
+	return session.id
+}
+
+func (session *MockSession) Conn() net.Conn {
+	return session.mockConn
+}
+
+func (session *MockSession) IsClosed() bool {
 	return false
 }
 
-func (Session *MockSession) SyncSendPacket(packet []byte) error {
+func (session *MockSession) SyncSendPacket(packet []byte) error {
 	return nil
 }
 
-func (Session *MockSession) Send(message Message) error {
+func (session *MockSession) Send(message Message) error {
 	return nil
 }
 
-func (Session *MockSession) SendPacket(packet []byte) error {
-	Session.sendPacketChan <- packet
+func (session *MockSession) SendPacket(packet []byte) error {
+	session.mockConn.sendPacketChan <- packet
 	return nil
 }
 
@@ -45,6 +94,6 @@ func (session *MockSession) Close(reason interface{}) {
 }
 
 func (session *MockSession) Read() ([]byte, error) {
-	bytes := <-session.sendPacketChan
+	bytes := <-session.mockConn.sendPacketChan
 	return bytes, nil
 }
