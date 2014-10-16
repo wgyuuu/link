@@ -91,6 +91,7 @@ func (session *MockSession) SendPacket(packet []byte) error {
 }
 
 func (session *MockSession) Close(reason interface{}) {
+	close(session.mockConn.sendPacketChan)
 }
 
 func (session *MockSession) Read() ([]byte, error) {
