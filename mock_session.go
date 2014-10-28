@@ -95,6 +95,10 @@ func (session *MockSession) Close(reason interface{}) {
 }
 
 func (session *MockSession) Read() ([]byte, error) {
-	bytes := <-session.mockConn.sendPacketChan
-	return bytes, nil
+	select {
+	case <-time.After(time.Second * 2):
+		return nil, nil
+	case bytes := <-session.mockConn.sendPacketChan:
+		return bytes, nil
+	}
 }
