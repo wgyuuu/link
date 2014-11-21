@@ -9,9 +9,8 @@ type SessionAble interface {
 
 	Send(message Message) error
 
-	SendPacket(packet []byte) error
+	SendPacket(OutMessage) error
 
-	Read() ([]byte, error)
-
+	Read() (InMessage, error)
 	Close(reason interface{})
 }

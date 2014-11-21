@@ -85,8 +85,8 @@ func (session *MockSession) Send(message Message) error {
 	return nil
 }
 
-func (session *MockSession) SendPacket(packet []byte) error {
-	session.mockConn.sendPacketChan <- packet
+func (session *MockSession) SendPacket(message OutMessage) error {
+	session.mockConn.sendPacketChan <- message.Bytes()
 	return nil
 }
 
@@ -94,7 +94,7 @@ func (session *MockSession) Close(reason interface{}) {
 	close(session.mockConn.sendPacketChan)
 }
 
-func (session *MockSession) Read() ([]byte, error) {
+func (session *MockSession) Read() (InMessage, error) {
 	select {
 	case <-time.After(time.Second * 2):
 		return nil, nil
