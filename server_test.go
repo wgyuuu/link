@@ -2,7 +2,7 @@ package link
 
 import (
 	"bytes"
-	"encoding/binary"
+	"github.com/funny/ceshi"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
@@ -10,12 +10,10 @@ import (
 )
 
 func Test_Server(t *testing.T) {
-	proto := PacketN(4, binary.BigEndian)
+	proto := PacketN(4, BigEndianBO, LittleEndianBF)
 
 	server, err0 := Listen("tcp", "0.0.0.0:0", proto)
-	if err0 != nil {
-		t.Fatalf("Setup server failed, Error = %v", err0)
-	}
+	ceshi.NotError(t, err0)
 
 	var (
 		addr    = server.Listener().Addr().String()
@@ -36,8 +34,8 @@ func Test_Server(t *testing.T) {
 			atomic.AddInt32(&sessionStartCount, 1)
 			sessionStart.Done()
 
-			session.ReadLoop(func(msg InMessage) {
-				if !bytes.Equal(msg, message) {
+			session.ReadLoop(func(msg InBuffer) {
+				if !bytes.Equal(msg.Get(), message) {
 					messageMatchFailed = true
 				}
 
@@ -53,52 +51,34 @@ func Test_Server(t *testing.T) {
 	// test session start
 	sessionStart.Add(1)
 	client1, err1 := Dial("tcp", addr, proto)
-	if err1 != nil {
-		t.Fatal("Create client1 failed, Error = %v", err1)
-	}
+	ceshi.NotError(t, err1)
 
 	sessionStart.Add(1)
 	client2, err2 := Dial("tcp", addr, proto)
-	if err2 != nil {
-		t.Fatal("Create client2 failed, Error = %v", err2)
-	}
+	ceshi.NotError(t, err2)
 
 	t.Log("check session start")
 	sessionStart.Wait()
-	if sessionStartCount != 2 {
-		t.Fatal("session start count != 2")
-	}
+	ceshi.Pass(t, sessionStartCount == 2)
 
 	// test session request
 	sessionRequest.Add(1)
-	if err := client1.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
+	ceshi.NotError(t, client1.Send(message))
 
 	sessionRequest.Add(1)
-	if err := client2.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
+	ceshi.NotError(t, client2.Send(message))
 
 	sessionRequest.Add(1)
-	if err := client1.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
+	ceshi.NotError(t, client1.Send(message))
 
 	sessionRequest.Add(1)
-	if err := client2.Send(message); err != nil {
-		t.Fatal("Send message failed, Error = %v", err)
-	}
+	ceshi.NotError(t, client2.Send(message))
 
 	t.Log("check session request")
 	sessionRequest.Wait()
-	if sessionRequestCount != 4 {
-		t.Fatal("session request count != 4")
-	}
 
-	if messageMatchFailed {
-		t.Fatal("Message match failed")
-	}
+	ceshi.Pass(t, sessionRequestCount == 4)
+	ceshi.Pass(t, messageMatchFailed == false)
 
 	// test session close
 	sessionClose.Add(1)
@@ -109,9 +89,7 @@ func Test_Server(t *testing.T) {
 
 	t.Log("check session close")
 	sessionClose.Wait()
-	if sessionCloseCount != 2 {
-		t.Fatal("session close count != 2")
-	}
+	ceshi.Pass(t, sessionCloseCount == 2)
 
 	MakeSureSessionGoroutineExit(t)
 }

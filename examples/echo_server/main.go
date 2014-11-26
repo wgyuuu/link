@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"github.com/funny/link"
@@ -26,7 +25,7 @@ func main() {
 
 	link.DefaultConnBufferSize = *buffersize
 
-	protocol := link.PacketN(2, binary.BigEndian)
+	protocol := link.PacketN(2, link.BigEndianBO, link.LittleEndianBF)
 
 	server, err := link.Listen("tcp", "127.0.0.1:10010", protocol)
 	if err != nil {
@@ -38,9 +37,9 @@ func main() {
 	server.AcceptLoop(func(session *link.Session) {
 		log("client", session.Conn().RemoteAddr().String(), "in")
 
-		session.ReadLoop(func(msg link.InMessage) {
-			log("client", session.Conn().RemoteAddr().String(), "say:", string(msg))
-			session.Send(link.Binary(msg))
+		session.ReadLoop(func(msg link.InBuffer) {
+			log("client", session.Conn().RemoteAddr().String(), "say:", string(msg.Get()))
+			session.Send(link.Binary(msg.Get()))
 		})
 
 		log("client", session.Conn().RemoteAddr().String(), "close")
