@@ -3,7 +3,6 @@ package link
 import (
 	"encoding/binary"
 	"io"
-	"log"
 	"net"
 
 	//log "github.com/cihub/seelog"
@@ -112,6 +111,7 @@ func NewPNReader(n int, bo binary.ByteOrder) *PNReader {
 }
 
 // Read a packet from conn.
+
 func (r *PNReader) ReadPacket(conn net.Conn, buffer InBuffer) error {
 	if _, err := io.ReadFull(conn, r.head); err != nil {
 		return err
@@ -134,16 +134,6 @@ func (r *PNReader) ReadPacket(conn net.Conn, buffer InBuffer) error {
 
 	if r.maxsize > 0 && size > r.maxsize {
 		return PacketTooLargeError
-	}
-
-	if size >= 5725856 { //大概50MB内存
-		log.Println("try to allocate too much memroy, r.n is ", r.n, " r.head is ", r.head, " size is ", size)
-		return nil
-	}
-	if uint(cap(*buffer)) >= size {
-		*buffer = (*buffer)[0:size]
-	} else {
-		*buffer = make([]byte, size)
 	}
 
 	if size == 0 {

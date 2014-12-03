@@ -127,7 +127,7 @@ func (session *Session) ReadLoop(handler func(InBuffer)) {
 			session.Close(err)
 			break
 		}
-		if buffer != nil && len(buffer.Bytes()) > 0 {
+		if buffer != nil && len(buffer.Get()) > 0 {
 			handler(buffer)
 		}
 	}
