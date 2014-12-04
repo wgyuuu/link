@@ -52,12 +52,13 @@ func (this MockConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-func NewMockSession() *MockSession {
+func NewMockSession(id int) *MockSession {
 	bytesChan := make(chan []byte, 100)
 	mockConn := MockConn{
 		sendPacketChan: bytesChan,
 	}
 	return &MockSession{
+		id:       uint64(id),
 		mockConn: mockConn,
 	}
 }
