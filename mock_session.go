@@ -86,8 +86,8 @@ func (session *MockSession) Send(message Message) error {
 	return nil
 }
 
-func (session *MockSession) SendPacket(message OutBuffer) error {
-	session.mockConn.sendPacketChan <- message.Data
+func (session *MockSession) SendPacket(packet Packet) error {
+	session.mockConn.sendPacketChan <- packet.Data
 	return nil
 }
 

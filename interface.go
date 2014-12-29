@@ -9,7 +9,7 @@ type SessionAble interface {
 
 	Send(message Message) error
 
-	SendPacket(message OutBuffer) error
+	SendPacket(packet Packet) error
 
 	Read() (*InBuffer, error)
 	Close(reason interface{})
