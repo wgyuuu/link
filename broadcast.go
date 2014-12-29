@@ -1,57 +1,116 @@
 package link
 
-import "sync"
-
-// A broadcast sender. The broadcast message only encoded once
-// so the performance it's better then send message one by one.
-type Broadcaster struct {
-	mutex  sync.Mutex
-	writer PacketWriter
-	buffer OutBuffer
-}
-
-// Craete a broadcaster.
-func NewBroadcaster(protocol PacketProtocol) *Broadcaster {
-	return &Broadcaster{
-		writer: protocol.NewWriter(),
-		buffer: protocol.BufferFactory().NewOutBuffer(),
-	}
-}
-
-func (b *Broadcaster) packet(message Message) error {
-	b.buffer.Prepare(message.RecommendBufferSize())
-	return message.WriteBuffer(b.buffer)
-}
+import "github.com/funny/sync"
 
 // The session collection use to fetch session and send broadcast.
 type SessionCollection interface {
-	Fetch(func(*Session))
+	Protocol() Protocol
+	FetchSession(func(*Session))
+}
+
+type BroadcastWork struct {
+	Session *Session
+	AsyncWork
 }
 
 // Broadcast to sessions. The message only encoded once
-// so the performance it's better then send message one by one.
-func (b *Broadcaster) Broadcast(sessions SessionCollection, message Message) error {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-	if err := b.packet(message); err != nil {
-		return err
+// so the performance is better than send message one by one.
+func Broadcast(sessions SessionCollection, message Message) ([]BroadcastWork, error) {
+	buffer := NewOutBuffer()
+	packet, err := sessions.Protocol().Packet(message, buffer)
+	if err != nil {
+		return nil, err
 	}
-	sessions.Fetch(func(session *Session) {
-		session.TrySendPacket(b.buffer, 0)
+	works := make([]BroadcastWork, 0, 10)
+	buffer.isBroadcast = true
+	sessions.FetchSession(func(session *Session) {
+		buffer.broadcastUse()
+		works = append(works, BroadcastWork{
+			session,
+			session.AsyncSendPacket(packet),
+		})
 	})
-	return nil
+	return works, nil
 }
 
-// Broadcast to sessions. The message only encoded once
-// so the performance it's better then send message one by one.
-func (b *Broadcaster) MustBroadcast(sessions SessionCollection, message Message) error {
-	b.mutex.Lock()
-	defer b.mutex.Unlock()
-	if err := b.packet(message); err != nil {
-		return err
+// The channel type. Used to maintain a group of session.
+// Normally used for broadcast classify purpose.
+type Channel struct {
+	mutex    sync.RWMutex
+	protocol Protocol
+	sessions map[uint64]channelSession
+}
+
+type channelSession struct {
+	*Session
+	KickCallback func()
+}
+
+// Create a channel instance.
+func NewChannel(protocol Protocol) *Channel {
+	return &Channel{
+		protocol: protocol,
+		sessions: make(map[uint64]channelSession),
 	}
-	sessions.Fetch(func(session *Session) {
-		session.SendPacket(b.buffer)
-	})
-	return nil
+}
+
+// How mush sessions in this channel.
+func (channel *Channel) Len() int {
+	channel.mutex.RLock()
+	defer channel.mutex.RUnlock()
+
+	return len(channel.sessions)
+}
+
+// Join the channel. The kickCallback will called when the session kick out from the channel.
+func (channel *Channel) Join(session *Session, kickCallback func()) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	session.AddCloseEventListener(channel)
+	channel.sessions[session.Id()] = channelSession{session, kickCallback}
+}
+
+// Implement the SessionCloseEventListener interface.
+func (channel *Channel) OnSessionClose(session *Session) {
+	channel.Exit(session)
+}
+
+// Exit the channel.
+func (channel *Channel) Exit(session *Session) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	session.RemoveCloseEventListener(channel)
+	delete(channel.sessions, session.Id())
+}
+
+// Kick out a session from the channel.
+func (channel *Channel) Kick(sessionId uint64) {
+	channel.mutex.Lock()
+	defer channel.mutex.Unlock()
+
+	if session, exists := channel.sessions[sessionId]; exists {
+		delete(channel.sessions, sessionId)
+		if session.KickCallback != nil {
+			session.KickCallback()
+		}
+	}
+}
+
+// Get channel protocol.
+// Implement SessionCollection interface.
+func (channel *Channel) Protocol() Protocol {
+	return channel.protocol
+}
+
+// Fetch the sessions. NOTE: Invoke Kick() or Exit() in fetch callback will dead lock.
+// Implement SessionCollection interface.
+func (channel *Channel) FetchSession(callback func(*Session)) {
+	channel.mutex.RLock()
+	defer channel.mutex.RUnlock()
+
+	for _, sesssion := range channel.sessions {
+		callback(sesssion.Session)
+	}
 }
