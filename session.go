@@ -144,20 +144,6 @@ func (session *Session) Read() (*InBuffer, error) {
 	return buffer, nil
 }
 
-// Loop and read message. NOTE: The callback argument point to internal read buffer.
-func (session *Session) ReadLoop(handler func(InBuffer)) {
-	var buffer = session.bufferFactory.NewInBuffer()
-	for {
-		if err := session.ReadReuseBuffer(buffer); err != nil {
-			session.Close(err)
-			break
-		}
-		if buffer != nil && len(buffer.Get()) > 0 {
-			handler(buffer)
-		}
-	}
-}
-
 // Sync send a message. Equals Packet() then SendPacket(). This method will block on IO.
 func (session *Session) Send(message Message) error {
 	packet, err := session.Packet(message)

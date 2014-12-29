@@ -11,6 +11,6 @@ type SessionAble interface {
 
 	SendPacket(message OutBuffer) error
 
-	Read() (InBuffer, error)
+	Read() (*InBuffer, error)
 	Close(reason interface{})
 }
