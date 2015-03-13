@@ -135,6 +135,10 @@ func (session *Session) Close() {
 	}
 }
 
+func (session *Session) SendBytes(data []byte) error {
+	return session.Send(Bytes(data))
+}
+
 // Sync send a message. This method will block on IO.
 func (session *Session) Send(message Message) error {
 	session.outBufferMutex.Lock()
