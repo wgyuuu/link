@@ -54,35 +54,36 @@ type ProtocolState interface {
 // Create a {packet, N} protocol.
 // The n means how many bytes of the packet header.
 // n must is 1、2、4 or 8.
-func PacketN(n int, byteOrder ByteOrder) Protocol {
+func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
 	switch n {
 	case 1:
 		switch byteOrder {
 		case BigEndian:
-			return packet1BE
+
+			return packet1BE.setMaxPacketSize(MaxPacketSize)
 		case LittleEndian:
-			return packet1LE
+			return packet1LE.setMaxPacketSize(MaxPacketSize)
 		}
 	case 2:
 		switch byteOrder {
 		case BigEndian:
-			return packet2BE
+			return packet2BE.setMaxPacketSize(MaxPacketSize)
 		case LittleEndian:
-			return packet2LE
+			return packet2LE.setMaxPacketSize(MaxPacketSize)
 		}
 	case 4:
 		switch byteOrder {
 		case BigEndian:
-			return packet4BE
+			return packet4BE.setMaxPacketSize(MaxPacketSize)
 		case LittleEndian:
-			return packet4LE
+			return packet4LE.setMaxPacketSize(MaxPacketSize)
 		}
 	case 8:
 		switch byteOrder {
 		case BigEndian:
-			return packet8BE
+			return packet8BE.setMaxPacketSize(MaxPacketSize)
 		case LittleEndian:
-			return packet8LE
+			return packet8LE.setMaxPacketSize(MaxPacketSize)
 		}
 	}
 	panic("unsupported packet head size")
@@ -96,6 +97,12 @@ type simpleProtocol struct {
 	encodeHead    func([]byte)
 	decodeHead    func([]byte) int
 	MaxPacketSize int
+}
+
+func (p *simpleProtocol) setMaxPacketSize(MaxPacketSize int) *simpleProtocol {
+	p.MaxPacketSize = MaxPacketSize
+	return p
+
 }
 
 func newSimpleProtocol(n int, byteOrder binary.ByteOrder) *simpleProtocol {
