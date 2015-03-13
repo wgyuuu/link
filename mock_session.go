@@ -92,6 +92,8 @@ func (session *MockSession) SendBytes(data []byte) error {
 func (session *MockSession) Close() {
 	close(session.mockConn.sendPacketChan)
 }
+func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {
+}
 
 // func (session *MockSession) Read() (*InBuffer, error) {
 // 	select {

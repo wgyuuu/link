@@ -7,6 +7,7 @@ type SessionAble interface {
 	Conn() net.Conn
 	IsClosed() bool
 	Close()
+	AddCloseCallback(handler interface{}, callback func())
 
 	Send(message Message) error
 
