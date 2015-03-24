@@ -94,6 +94,10 @@ func (session *MockSession) Close() {
 }
 func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {
 }
+func (session *MockSession) Process(decoder Decoder) error {
+	return nil
+
+}
 
 // func (session *MockSession) Read() (*InBuffer, error) {
 // 	select {
