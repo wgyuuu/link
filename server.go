@@ -69,6 +69,9 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 func (server *Server) Listener() net.Listener {
 	return server.listener
 }
+func (server *Server) GetSessions() map[uint64]*Session {
+	return server.sessions
+}
 
 // Get protocol.
 func (server *Server) Protocol() Protocol {
