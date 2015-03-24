@@ -49,6 +49,7 @@ type Server struct {
 	SendChanSize   int         // Session send chan buffer size.
 	ReadBufferSize int         // Session read buffer size.
 	State          interface{} // server state.
+	isServing      int32       // if this is false ,when new conn coming ,close it directly
 }
 
 // Create a server.
@@ -59,6 +60,7 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 		sessions:       make(map[uint64]*Session),
 		SendChanSize:   DefaultSendChanSize,
 		ReadBufferSize: DefaultConnBufferSize,
+		isServing:      1,
 	}
 	protocolState, _ := protocol.New(server, SERVER_SIDE)
 	server.broadcaster = NewBroadcaster(protocolState, server.fetchSession)
@@ -71,6 +73,17 @@ func (server *Server) Listener() net.Listener {
 }
 func (server *Server) GetSessions() map[uint64]*Session {
 	return server.sessions
+}
+
+func (server *Server) IsServing() bool {
+	return atomic.LoadInt32(&(server.isServing)) == 1
+}
+func (server *Server) SetServing(serveing bool) {
+	if serveing {
+		atomic.StoreInt32(&(server.isServing), 1)
+		return
+	}
+	atomic.StoreInt32(&(server.isServing), 0)
 }
 
 // Get protocol.
@@ -91,6 +104,11 @@ func (server *Server) Accept() (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
+		if !server.IsServing() {
+			conn.Close()
+			return nil, nil
+		}
+
 		session := server.newSession(
 			atomic.AddUint64(&server.maxSessionId, 1),
 			conn,
@@ -111,6 +129,10 @@ func (server *Server) Serve(handler func(*Session)) error {
 			}
 			return nil
 		}
+		if session == nil {
+			continue
+		}
+
 		go handler(session)
 	}
 	return nil
