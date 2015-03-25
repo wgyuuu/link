@@ -10,9 +10,10 @@ import (
 
 // Errors
 var (
-	SendToClosedError     = errors.New("Send to closed session")
-	PacketTooLargeError   = errors.New("Packet too large")
-	AsyncSendTimeoutError = errors.New("Async send timeout")
+	SendToClosedError           = errors.New("Send to closed session")
+	PacketTooLargeforReadError  = errors.New("Packet too large for read")
+	PacketTooLargeForWriteError = errors.New("Packet too large for write")
+	AsyncSendTimeoutError       = errors.New("Async send timeout")
 )
 
 var (

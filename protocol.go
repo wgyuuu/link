@@ -158,7 +158,7 @@ func (p *simpleProtocol) PrepareOutBuffer(buffer *OutBuffer, size int) {
 
 func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
 	if p.MaxPacketSize > 0 && len(packet.Data) > p.MaxPacketSize {
-		return PacketTooLargeError
+		return PacketTooLargeForWriteError
 	}
 	p.encodeHead(packet.Data)
 	if _, err := writer.Write(packet.Data); err != nil {
@@ -175,7 +175,7 @@ func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 	}
 	size := p.decodeHead(buffer.Data)
 	if p.MaxPacketSize > 0 && size > p.MaxPacketSize {
-		return PacketTooLargeError
+		return PacketTooLargeforReadError
 	}
 	// body
 	buffer.Prepare(size)
