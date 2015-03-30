@@ -2,6 +2,7 @@ package link
 
 import (
 	"errors"
+	"fmt"
 	"github.com/funny/sync"
 	"net"
 	"sync/atomic"
@@ -20,6 +21,7 @@ var (
 	DefaultSendChanSize   = 1024                        // Default session send chan buffer size.
 	DefaultConnBufferSize = 1024                        // Default session read buffer size.
 	DefaultProtocol       = PacketN(4, LittleEndian, 0) // Default protocol for utility APIs.
+	DefaultMaxSessionCnt  = 0                           // 0 means no limit
 )
 
 // The easy way to setup a server.
@@ -51,6 +53,7 @@ type Server struct {
 	ReadBufferSize int         // Session read buffer size.
 	State          interface{} // server state.
 	isServing      int32       // if this is false ,when new conn coming ,close it directly
+	maxSessionCnt  int
 }
 
 // Create a server.
@@ -62,6 +65,7 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 		SendChanSize:   DefaultSendChanSize,
 		ReadBufferSize: DefaultConnBufferSize,
 		isServing:      1,
+		maxSessionCnt:  DefaultMaxSessionCnt,
 	}
 	protocolState, _ := protocol.New(server, SERVER_SIDE)
 	server.broadcaster = NewBroadcaster(protocolState, server.fetchSession)
@@ -107,6 +111,11 @@ func (server *Server) Accept() (*Session, error) {
 		}
 		if !server.IsServing() {
 			conn.Close()
+			return nil, nil
+		}
+		if server.maxSessionCnt != 0 && len(server.sessions) >= server.maxSessionCnt {
+			conn.Close()
+			fmt.Println("reach_server_session_max_cnt", server.maxSessionCnt, "new conn will be rejected!", time.Now())
 			return nil, nil
 		}
 
