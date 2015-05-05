@@ -3,10 +3,11 @@ package link
 import (
 	"bufio"
 	"container/list"
-	"github.com/funny/sync"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/funny/sync"
 )
 
 var dialSessionId uint64

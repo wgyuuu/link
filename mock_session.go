@@ -85,23 +85,25 @@ func (session *MockSession) SyncSendPacket(packet []byte) error {
 func (session *MockSession) Send(message Message) error {
 	return nil
 }
+
 func (session *MockSession) SendBytes(data []byte) error {
 	return session.Send(Bytes(data))
 }
 
-func (session *MockSession) Close() {
-	close(session.mockConn.sendPacketChan)
-}
 func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {
 }
 
-// func (session *MockSession) Read() (*InBuffer, error) {
-// 	select {
-// 	case <-time.After(time.Second * 2):
-// 		return nil, nil
-// 	case bytes := <-session.mockConn.sendPacketChan:
-// 		inBuffer := &InBuffer{}
-// 		inBuffer.Data = bytes
-// 		return inBuffer, nil
-// 	}
-// }
+func (session *MockSession) Close(reason interface{}) {
+	close(session.mockConn.sendPacketChan)
+}
+
+func (session *MockSession) Read() (*InBuffer, error) {
+	select {
+	case <-time.After(time.Second * 2):
+		return nil, nil
+	case bytes := <-session.mockConn.sendPacketChan:
+		inBuffer := &InBuffer{}
+		inBuffer.Data = bytes
+		return inBuffer, nil
+	}
+}
