@@ -2,6 +2,7 @@ package link
 
 import (
 	"errors"
+	"fmt"
 	"github.com/funny/sync"
 	"net"
 	"sync/atomic"
@@ -10,15 +11,17 @@ import (
 
 // Errors
 var (
-	SendToClosedError     = errors.New("Send to closed session")
-	PacketTooLargeError   = errors.New("Packet too large")
-	AsyncSendTimeoutError = errors.New("Async send timeout")
+	SendToClosedError           = errors.New("Send to closed session")
+	PacketTooLargeforReadError  = errors.New("Packet too large for read")
+	PacketTooLargeForWriteError = errors.New("Packet too large for write")
+	AsyncSendTimeoutError       = errors.New("Async send timeout")
 )
 
 var (
 	DefaultSendChanSize   = 1024                        // Default session send chan buffer size.
 	DefaultConnBufferSize = 1024                        // Default session read buffer size.
 	DefaultProtocol       = PacketN(4, LittleEndian, 0) // Default protocol for utility APIs.
+	DefaultMaxSessionCnt  = 0                           // 0 means no limit
 )
 
 // The easy way to setup a server.
@@ -49,6 +52,8 @@ type Server struct {
 	SendChanSize   int         // Session send chan buffer size.
 	ReadBufferSize int         // Session read buffer size.
 	State          interface{} // server state.
+	isServing      int32       // if this is false ,when new conn coming ,close it directly
+	maxSessionCnt  int
 }
 
 // Create a server.
@@ -59,6 +64,8 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 		sessions:       make(map[uint64]*Session),
 		SendChanSize:   DefaultSendChanSize,
 		ReadBufferSize: DefaultConnBufferSize,
+		isServing:      1,
+		maxSessionCnt:  DefaultMaxSessionCnt,
 	}
 	protocolState, _ := protocol.New(server, SERVER_SIDE)
 	server.broadcaster = NewBroadcaster(protocolState, server.fetchSession)
@@ -68,6 +75,20 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 // Get listener address.
 func (server *Server) Listener() net.Listener {
 	return server.listener
+}
+func (server *Server) GetSessions() map[uint64]*Session {
+	return server.sessions
+}
+
+func (server *Server) IsServing() bool {
+	return atomic.LoadInt32(&(server.isServing)) == 1
+}
+func (server *Server) SetServing(serveing bool) {
+	if serveing {
+		atomic.StoreInt32(&(server.isServing), 1)
+		return
+	}
+	atomic.StoreInt32(&(server.isServing), 0)
 }
 
 // Get protocol.
@@ -88,6 +109,16 @@ func (server *Server) Accept() (*Session, error) {
 		if err != nil {
 			return nil, err
 		}
+		if !server.IsServing() {
+			conn.Close()
+			return nil, nil
+		}
+		if server.maxSessionCnt != 0 && len(server.sessions) >= server.maxSessionCnt {
+			conn.Close()
+			fmt.Println("reach_server_session_max_cnt", server.maxSessionCnt, "new conn will be rejected!", time.Now())
+			return nil, nil
+		}
+
 		session := server.newSession(
 			atomic.AddUint64(&server.maxSessionId, 1),
 			conn,
@@ -108,6 +139,10 @@ func (server *Server) Serve(handler func(*Session)) error {
 			}
 			return nil
 		}
+		if session == nil {
+			continue
+		}
+
 		go handler(session)
 	}
 	return nil

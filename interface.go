@@ -12,6 +12,7 @@ type SessionAble interface {
 	Send(message Message) error
 
 	SendBytes(data []byte) error
+	Process(decoder Decoder) error
 
 	Read() (*InBuffer, error)
 	Close(reason interface{})
