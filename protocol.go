@@ -173,7 +173,7 @@ func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 	if _, err := io.ReadFull(reader, buffer.Data); err != nil {
 		return err
 	}
-	if buffer.Data == nil {
+	if buffer.Data == nil || len(buffer.Data) == 0 {
 		return PacketTooLargeforReadError
 	}
 	size := p.decodeHead(buffer.Data)
