@@ -15,5 +15,5 @@ type SessionAble interface {
 	Process(decoder Decoder) error
 
 	Read() (*InBuffer, error)
-	Close(reason interface{})
+	Close()
 }

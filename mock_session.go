@@ -97,7 +97,7 @@ func (session *MockSession) Process(decoder Decoder) error {
 
 }
 
-func (session *MockSession) Close(reason interface{}) {
+func (session *MockSession) Close() {
 	close(session.mockConn.sendPacketChan)
 }
 
