@@ -14,6 +14,5 @@ type SessionAble interface {
 	SendBytes(data []byte) error
 	Process(decoder Decoder) error
 
-	Read() (*InBuffer, error)
 	Close()
 }
