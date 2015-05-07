@@ -5,6 +5,7 @@ import (
 	"io"
 	"math"
 	"sync/atomic"
+	"sync"
 	"unicode/utf8"
 	"unsafe"
 )
@@ -91,6 +92,7 @@ type bufferPool struct {
 
 	// InBuffer
 	in     unsafe.Pointer
+	inPool sync.Pool
 	inGet  uint64
 	inNew  uint64
 	inFree uint64
@@ -98,6 +100,7 @@ type bufferPool struct {
 
 	// OutBuffer
 	out     unsafe.Pointer
+	outPool sync.Pool
 	outGet  uint64
 	outNew  uint64
 	outFree uint64
@@ -113,95 +116,27 @@ func newBufferPool() *bufferPool {
 		sizeLimit:       10240000,
 		bufferInitSize:  1024,
 		bufferSizeLimit: 102400,
+		inPool:sync.Pool{New:newInBufferObj},
+		outPool:sync.Pool{New:newOutBufferObj},
 	}
 }
 
 func (pool *bufferPool) GetInBuffer() (in *InBuffer) {
-	var ptr unsafe.Pointer
-	for {
-		ptr = atomic.LoadPointer(&pool.in)
-		if ptr == nil {
-			break
-		}
-		if atomic.CompareAndSwapPointer(&pool.in, ptr, ((*InBuffer)(ptr)).next) {
-			break
-		}
-	}
-
-	atomic.AddUint64(&pool.inGet, 1)
-	if ptr == nil {
-		atomic.AddUint64(&pool.inNew, 1)
-		in = &InBuffer{Data: make([]byte, 0, pool.bufferInitSize), pool: pool}
-	} else {
-		in = (*InBuffer)(ptr)
-		atomic.AddInt64(&pool.size, -int64(cap(in.Data)))
-	}
-
-	in.isFreed = false
-	return in
+	bufferObj:=pool.inPool.Get()
+	return bufferObj.(*InBuffer)
 }
 
 func (pool *bufferPool) GetOutBuffer() (out *OutBuffer) {
-	var ptr unsafe.Pointer
-	for {
-		ptr = atomic.LoadPointer(&pool.out)
-		if ptr == nil {
-			break
-		}
-		if atomic.CompareAndSwapPointer(&pool.out, ptr, ((*OutBuffer)(ptr)).next) {
-			break
-		}
-	}
-
-	atomic.AddUint64(&pool.outGet, 1)
-	if ptr == nil {
-		atomic.AddUint64(&pool.outNew, 1)
-		out = &OutBuffer{Data: make([]byte, 0, pool.bufferInitSize), pool: pool}
-	} else {
-		out = (*OutBuffer)(ptr)
-		atomic.AddInt64(&pool.size, -int64(cap(out.Data)))
-	}
-
-	out.isFreed = false
-	out.isBroadcast = false
-	out.refCount = 0
-	return out
+	bufferObj:=pool.outPool.Get()
+	return bufferObj.(*OutBuffer)
 }
 
 func (pool *bufferPool) PutInBuffer(in *InBuffer) {
-	atomic.AddUint64(&pool.inFree, 1)
-	if cap(in.Data) >= pool.bufferSizeLimit || atomic.LoadInt64(&pool.size) >= pool.sizeLimit {
-		atomic.AddUint64(&pool.inDrop, 1)
-		return
-	}
-
-	in.isFreed = true
-
-	for {
-		in.next = atomic.LoadPointer(&pool.in)
-		if atomic.CompareAndSwapPointer(&pool.in, in.next, unsafe.Pointer(in)) {
-			atomic.AddInt64(&pool.size, int64(cap(in.Data)))
-			break
-		}
-	}
+	pool.inPool.Put(in)
 }
 
 func (pool *bufferPool) PutOutBuffer(out *OutBuffer) {
-	atomic.AddUint64(&pool.outFree, 1)
-	if cap(out.Data) >= pool.bufferSizeLimit || atomic.LoadInt64(&pool.size) >= pool.sizeLimit {
-		atomic.AddUint64(&pool.outDrop, 1)
-		return
-	}
-
-	out.isFreed = true
-
-	for {
-		out.next = atomic.LoadPointer(&pool.out)
-		if atomic.CompareAndSwapPointer(&pool.out, out.next, unsafe.Pointer(out)) {
-			atomic.AddInt64(&pool.size, int64(cap(out.Data)))
-			break
-		}
-	}
+	pool.outPool.Put(out)
 }
 
 // Incomming message buffer.
@@ -213,11 +148,17 @@ type InBuffer struct {
 	next    unsafe.Pointer
 }
 
+func newInBufferObj()interface{}{
+	return &InBuffer{
+		Data: make([]byte, 0, 1024),
+	}
+}
+
 func newInBuffer() *InBuffer {
-	if enableBufferPool {
+	if(enableBufferPool==true){
 		return globalPool.GetInBuffer()
 	}
-	return &InBuffer{Data: make([]byte, 0, globalPool.bufferInitSize)}
+	return &InBuffer{Data: make([]byte, 0, 1024)}
 }
 
 func (in *InBuffer) reset() {
@@ -232,7 +173,7 @@ func (in *InBuffer) free() {
 			panic("link.InBuffer: double free")
 		}
 		in.reset()
-		in.pool.PutInBuffer(in)
+		globalPool.PutInBuffer(in)
 	}
 }
 
@@ -366,11 +307,15 @@ type OutBuffer struct {
 	next        unsafe.Pointer
 }
 
+func newOutBufferObj()interface{}{
+	return &OutBuffer{Data: make([]byte, 0,1024)}
+}
+
 func newOutBuffer() *OutBuffer {
-	if enableBufferPool {
+	if(enableBufferPool==true){
 		return globalPool.GetOutBuffer()
 	}
-	return &OutBuffer{Data: make([]byte, 0, globalPool.bufferInitSize)}
+	return &OutBuffer{Data: make([]byte, 0,1024)}
 }
 
 func (out *OutBuffer) broadcastUse() {
@@ -398,7 +343,7 @@ func (out *OutBuffer) free() {
 			panic("link.OutBuffer: double free")
 		}
 		out.reset()
-		out.pool.PutOutBuffer(out)
+		globalPool.PutOutBuffer(out)
 	}
 }
 
