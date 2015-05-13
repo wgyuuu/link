@@ -195,6 +195,28 @@ func (session *Session) Process(decoder Decoder) error {
 	return nil
 }
 
+func (session *Session) ReadPacket() (data []byte, err error) {
+	// [Warning]:do not use this, use session.Process
+	// session.Read() just for debug
+	session.readMutex.Lock()
+	defer session.readMutex.Unlock()
+
+	buffer := session.inBuffer
+	err = session.protocol.Read(session.conn, buffer)
+	if err != nil {
+		buffer.reset()
+		session.Close()
+		return
+	}
+
+	// this is slow
+	data = make([]byte, len(buffer.Data))
+	copy(data, buffer.Data)
+	buffer.reset()
+
+	return
+}
+
 // Async work.
 type AsyncWork struct {
 	c <-chan error

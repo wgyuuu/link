@@ -10,6 +10,7 @@ type SessionAble interface {
 	AddCloseCallback(handler interface{}, callback func())
 
 	Send(message Message) error
+	ReadPacket() (data []byte, err error) // this is for debug ,donot use this in product environment.
 
 	SendBytes(data []byte) error
 	Process(decoder Decoder) error
