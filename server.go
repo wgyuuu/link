@@ -143,6 +143,11 @@ func (server *Server) Serve(handler func(*Session)) error {
 			continue
 		}
 
+		defer func() {
+			if e := recover(); e != nil {
+				fmt.Println("link.server.ERROR", e)
+			}
+		}()
 		go handler(session)
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"fmt"
 	"github.com/funny/sync"
 )
 
@@ -101,6 +102,11 @@ func NewSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, 
 		closeCallbacks:      list.New(),
 	}
 
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Println("link.session.ERROR", e)
+		}
+	}()
 	go session.sendLoop()
 
 	return session, nil
