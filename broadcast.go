@@ -1,7 +1,7 @@
 package link
 
 import (
-	"github.com/funny/sync"
+	"sync"
 	"time"
 )
 

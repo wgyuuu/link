@@ -82,15 +82,15 @@ func (session *MockSession) SyncSendPacket(packet []byte) error {
 	return nil
 }
 
-func (session *MockSession) Send(message Message) error {
+func (session *MockSession) Send(message Message, now time.Time) error {
 	return nil
 }
 func (session *MockSession) ReadPacket() (data []byte, err error) { // this is for debug ,donot use this in product environment.
 	return
 }
 
-func (session *MockSession) SendBytes(data []byte) error {
-	return session.Send(Bytes(data))
+func (session *MockSession) SendBytes(data []byte, now time.Time) error {
+	return session.Send(Bytes(data), now)
 }
 
 func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {

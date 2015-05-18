@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"fmt"
-	"github.com/funny/sync"
+	"sync"
 )
 
 var dialSessionId uint64
@@ -58,6 +58,7 @@ type Session struct {
 	closeEventMutex sync.Mutex
 	closeCallbacks  *list.List
 
+	lastSendTime time.Time
 	// Put your session state here.
 	State interface{}
 }
@@ -142,12 +143,15 @@ func (session *Session) Close() {
 	}
 }
 
-func (session *Session) SendBytes(data []byte) error {
-	return session.Send(Bytes(data))
+func (session *Session) GetLastSendTime() time.Time {
+	return session.lastSendTime
+}
+func (session *Session) SendBytes(data []byte, now time.Time) error {
+	return session.Send(Bytes(data), now)
 }
 
 // Sync send a message. This method will block on IO.
-func (session *Session) Send(message Message) error {
+func (session *Session) Send(message Message, now time.Time) error {
 	session.outBufferMutex.Lock()
 	defer session.outBufferMutex.Unlock()
 
@@ -162,6 +166,7 @@ func (session *Session) Send(message Message) error {
 	}
 
 	buffer.reset()
+	session.lastSendTime = now
 	return err
 }
 
@@ -251,7 +256,7 @@ func (session *Session) sendLoop() {
 			buffer.C <- session.sendBuffer(buffer.B)
 			buffer.B.broadcastFree()
 		case message := <-session.asyncSendChan:
-			message.C <- session.Send(message.M)
+			message.C <- session.Send(message.M, time.Now())
 		case <-session.closeChan:
 			return
 		}

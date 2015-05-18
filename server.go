@@ -3,8 +3,8 @@ package link
 import (
 	"errors"
 	"fmt"
-	"github.com/funny/sync"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 )
