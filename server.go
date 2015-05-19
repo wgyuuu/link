@@ -76,8 +76,8 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 func (server *Server) Listener() net.Listener {
 	return server.listener
 }
-func (server *Server) GetSessions() map[uint64]*Session {
-	return server.sessions
+func (server *Server) GetSessions() []*Session {
+	return server.copySessions()
 }
 
 func (server *Server) IsServing() bool {
