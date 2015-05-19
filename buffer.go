@@ -4,10 +4,9 @@ import (
 	"encoding/binary"
 	"io"
 	"math"
-	"sync/atomic"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
-	"unsafe"
 )
 
 var (
@@ -91,7 +90,7 @@ type bufferPool struct {
 	size int64
 
 	// InBuffer
-	in     unsafe.Pointer
+	// in     unsafe.Pointer
 	inPool sync.Pool
 	inGet  uint64
 	inNew  uint64
@@ -99,7 +98,7 @@ type bufferPool struct {
 	inDrop uint64
 
 	// OutBuffer
-	out     unsafe.Pointer
+	// out     unsafe.Pointer
 	outPool sync.Pool
 	outGet  uint64
 	outNew  uint64
@@ -116,18 +115,18 @@ func newBufferPool() *bufferPool {
 		sizeLimit:       10240000,
 		bufferInitSize:  1024,
 		bufferSizeLimit: 102400,
-		inPool:sync.Pool{New:newInBufferObj},
-		outPool:sync.Pool{New:newOutBufferObj},
+		inPool:          sync.Pool{New: newInBufferObj},
+		outPool:         sync.Pool{New: newOutBufferObj},
 	}
 }
 
 func (pool *bufferPool) GetInBuffer() (in *InBuffer) {
-	bufferObj:=pool.inPool.Get()
+	bufferObj := pool.inPool.Get()
 	return bufferObj.(*InBuffer)
 }
 
 func (pool *bufferPool) GetOutBuffer() (out *OutBuffer) {
-	bufferObj:=pool.outPool.Get()
+	bufferObj := pool.outPool.Get()
 	return bufferObj.(*OutBuffer)
 }
 
@@ -145,17 +144,17 @@ type InBuffer struct {
 	ReadPos int    // Read position.
 	isFreed bool
 	pool    *bufferPool
-	next    unsafe.Pointer
+	// next    unsafe.Pointer
 }
 
-func newInBufferObj()interface{}{
+func newInBufferObj() interface{} {
 	return &InBuffer{
 		Data: make([]byte, 0, 1024),
 	}
 }
 
 func newInBuffer() *InBuffer {
-	if(enableBufferPool==true){
+	if enableBufferPool == true {
 		return globalPool.GetInBuffer()
 	}
 	return &InBuffer{Data: make([]byte, 0, 1024)}
@@ -304,18 +303,18 @@ type OutBuffer struct {
 	isBroadcast bool
 	refCount    int32
 	pool        *bufferPool
-	next        unsafe.Pointer
+	// next        unsafe.Pointer
 }
 
-func newOutBufferObj()interface{}{
-	return &OutBuffer{Data: make([]byte, 0,1024)}
+func newOutBufferObj() interface{} {
+	return &OutBuffer{Data: make([]byte, 0, 1024)}
 }
 
 func newOutBuffer() *OutBuffer {
-	if(enableBufferPool==true){
+	if enableBufferPool == true {
 		return globalPool.GetOutBuffer()
 	}
-	return &OutBuffer{Data: make([]byte, 0,1024)}
+	return &OutBuffer{Data: make([]byte, 0, 1024)}
 }
 
 func (out *OutBuffer) broadcastUse() {
