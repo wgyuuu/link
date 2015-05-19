@@ -114,3 +114,10 @@ func (session *MockSession) Read() (*InBuffer, error) {
 		return inBuffer, nil
 	}
 }
+
+func (session *MockSession) GetState() (State interface{}) {
+	return nil
+}
+func (session *MockSession) SetState(State interface{}) {
+
+}

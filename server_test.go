@@ -7,6 +7,7 @@ import (
 	"runtime/pprof"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func Test_Server(t *testing.T) {
@@ -62,16 +63,16 @@ func Test_Server(t *testing.T) {
 
 	// test session request
 	sessionRequest.Add(1)
-	unitest.NotError(t, client1.Send(message))
+	unitest.NotError(t, client1.Send(message, time.Now()))
 
 	sessionRequest.Add(1)
-	unitest.NotError(t, client2.Send(message))
+	unitest.NotError(t, client2.Send(message, time.Now()))
 
 	sessionRequest.Add(1)
-	unitest.NotError(t, client1.Send(message))
+	unitest.NotError(t, client1.Send(message, time.Now()))
 
 	sessionRequest.Add(1)
-	unitest.NotError(t, client2.Send(message))
+	unitest.NotError(t, client2.Send(message, time.Now()))
 
 	t.Log("check session request")
 	sessionRequest.Wait()

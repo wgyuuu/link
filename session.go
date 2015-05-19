@@ -365,3 +365,12 @@ func (session *Session) invokeCloseCallbacks() {
 		callback.Func()
 	}
 }
+
+func (session Session) GetState() (State interface{}) {
+	// Get your session state here.
+	return session.State
+}
+func (session *Session) SetState(State interface{}) {
+	// Put your session state here.
+	session.State = State
+}

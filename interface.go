@@ -16,5 +16,7 @@ type SessionAble interface {
 	SendBytes(data []byte, now time.Time) error
 	Process(decoder Decoder) error
 
+	GetState() (State interface{})
+	SetState(State interface{})
 	Close()
 }
