@@ -19,104 +19,15 @@ func BufferPoolEnable(enable bool) {
 	enableBufferPool = enable
 }
 
-// Limit buffer pool memory usage. Default is 10M.
-func BufferPoolLimit(size int) int {
-	if size == 0 {
-		return int(globalPool.sizeLimit)
-	}
-	old := globalPool.sizeLimit
-	globalPool.sizeLimit = int64(size)
-	return int(old)
-}
-
-// Get/Set initialization capacity for new buffer. Default is 4096.
-func BufferInitSize(size int) int {
-	if size == 0 {
-		return globalPool.bufferInitSize
-	}
-	old := globalPool.bufferInitSize
-	globalPool.bufferInitSize = size
-	return old
-}
-
-// Limit buffer size in object pool.
-// Large buffer will not return to object pool when it freed. Default is 102400.
-func BufferSizeLimit(size int) int {
-	if size == 0 {
-		return globalPool.bufferSizeLimit
-	}
-	old := globalPool.bufferSizeLimit
-	globalPool.bufferSizeLimit = size
-	return old
-}
-
-// Buffer pool state.
-type PoolState struct {
-	InHitRate  float64 // Hit rate of InBuffer.
-	InFreeRate float64 // InBuffer free rate.
-	InDropRate float64 // Drop rate of large OutBuffer.
-
-	OutHitRate  float64 // Hit rate of OutBuffer.
-	OutFreeRate float64 // OutBuffer free rate.
-	OutDropRate float64 // Drop rate of large OutBuffer.
-}
-
-// Get buffer pool state.
-func BufferPoolState() PoolState {
-	var (
-		inGet  = float64(atomic.LoadUint64(&globalPool.inGet))
-		inNew  = float64(atomic.LoadUint64(&globalPool.inNew))
-		inFree = float64(atomic.LoadUint64(&globalPool.inFree))
-		inDrop = float64(atomic.LoadUint64(&globalPool.inDrop))
-	)
-	var (
-		outGet  = float64(atomic.LoadUint64(&globalPool.outGet))
-		outNew  = float64(atomic.LoadUint64(&globalPool.outNew))
-		outFree = float64(atomic.LoadUint64(&globalPool.outFree))
-		outDrop = float64(atomic.LoadUint64(&globalPool.outDrop))
-	)
-
-	return PoolState{
-		InHitRate:   (inGet - inNew) / inGet,
-		InFreeRate:  inFree / inGet,
-		InDropRate:  inDrop / inGet,
-		OutHitRate:  (outGet - outNew) / outGet,
-		OutFreeRate: outFree / outGet,
-		OutDropRate: outDrop / outGet,
-	}
-}
-
 type bufferPool struct {
-	size int64
-
-	// InBuffer
-	// in     unsafe.Pointer
-	inPool sync.Pool
-	inGet  uint64
-	inNew  uint64
-	inFree uint64
-	inDrop uint64
-
-	// OutBuffer
-	// out     unsafe.Pointer
+	inPool  sync.Pool
 	outPool sync.Pool
-	outGet  uint64
-	outNew  uint64
-	outFree uint64
-	outDrop uint64
-
-	sizeLimit       int64
-	bufferInitSize  int
-	bufferSizeLimit int
 }
 
 func newBufferPool() *bufferPool {
 	return &bufferPool{
-		sizeLimit:       10240000,
-		bufferInitSize:  1024,
-		bufferSizeLimit: 102400,
-		inPool:          sync.Pool{New: newInBufferObj},
-		outPool:         sync.Pool{New: newOutBufferObj},
+		inPool:  sync.Pool{New: newInBufferObj},
+		outPool: sync.Pool{New: newOutBufferObj},
 	}
 }
 

@@ -55,17 +55,6 @@ func VerifyBuffer(t *testing.T, buffer *InBuffer) {
 	unitest.Pass(t, buffer.ReadUvarint() == 0xFFEEDDCCBBAA9988)
 }
 
-func Benchmark_NewBuffer(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		x := newInBuffer()
-		x.free()
-	}
-	b.StopTimer()
-	state := BufferPoolState()
-	b.Logf("Hit Rate: %2.2f%%", state.InHitRate*100.0)
-	b.StartTimer()
-}
-
 func Benchmark_SetFinalizer1(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var x = &InBuffer{}
