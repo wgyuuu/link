@@ -18,5 +18,7 @@ type SessionAble interface {
 
 	GetState() (State interface{})
 	SetState(State interface{})
+	GetLastRecvTime() time.Time
+	GetLastSendTime() time.Time
 	Close()
 }

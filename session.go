@@ -59,6 +59,7 @@ type Session struct {
 	closeCallbacks  *list.List
 
 	lastSendTime time.Time
+	lastRecvTime time.Time
 	// Put your session state here.
 	State interface{}
 }
@@ -146,6 +147,10 @@ func (session *Session) Close() {
 func (session *Session) GetLastSendTime() time.Time {
 	return session.lastSendTime
 }
+func (session *Session) GetLastRecvTime() time.Time {
+	return session.lastRecvTime
+}
+
 func (session *Session) SendBytes(data []byte, now time.Time) error {
 	return session.Send(Bytes(data), now)
 }
@@ -189,6 +194,7 @@ func (session *Session) ProcessOnce(decoder Decoder) error {
 		session.Close()
 		return err
 	}
+	session.lastRecvTime = time.Now()
 
 	err = decoder(buffer)
 	buffer.reset()
@@ -219,6 +225,7 @@ func (session *Session) ReadPacket() (data []byte, err error) {
 		session.Close()
 		return
 	}
+	session.lastRecvTime = time.Now()
 
 	// this is slow
 	data = make([]byte, len(buffer.Data))

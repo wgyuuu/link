@@ -121,3 +121,9 @@ func (session *MockSession) GetState() (State interface{}) {
 func (session *MockSession) SetState(State interface{}) {
 
 }
+func (session *MockSession) GetLastRecvTime() time.Time {
+	return time.Now()
+}
+func (session *MockSession) GetLastSendTime() time.Time {
+	return time.Now()
+}
