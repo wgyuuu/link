@@ -130,7 +130,7 @@ func (server *Server) Accept() (*Session, error) {
 }
 
 // Loop and accept incoming connections. The callback will called asynchronously when each session start.
-func (server *Server) Serve(handler func(*Session)) error {
+func (server *Server) Serve(handler func(SessionAble)) error {
 	for {
 		session, err := server.Accept()
 		if err != nil {

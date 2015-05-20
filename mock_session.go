@@ -95,6 +95,9 @@ func (session *MockSession) SendBytes(data []byte, now time.Time) error {
 
 func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {
 }
+func (session *MockSession) RemoveCloseCallback(handler interface{}) {
+
+}
 func (session *MockSession) Process(decoder Decoder) error {
 	return nil
 

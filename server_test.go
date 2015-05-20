@@ -29,7 +29,7 @@ func Test_Server(t *testing.T) {
 		messageMatchFailed  bool
 	)
 
-	go server.Serve(func(session *Session) {
+	go server.Serve(func(session SessionAble) {
 		atomic.AddInt32(&sessionStartCount, 1)
 		sessionStart.Done()
 

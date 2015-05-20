@@ -9,6 +9,7 @@ type SessionAble interface {
 	IsClosed() bool
 
 	AddCloseCallback(handler interface{}, callback func())
+	RemoveCloseCallback(handler interface{})
 
 	Send(message Message, now time.Time) error
 	ReadPacket() (data []byte, err error) // this is for debug ,donot use this in product environment.
