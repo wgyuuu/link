@@ -130,3 +130,6 @@ func (session *MockSession) GetLastRecvTime() time.Time {
 func (session *MockSession) GetLastSendTime() time.Time {
 	return time.Now()
 }
+func (session *MockSession) GetCreateTime() time.Time {
+	return time.Now()
+}

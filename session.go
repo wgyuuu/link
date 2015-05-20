@@ -58,6 +58,7 @@ type Session struct {
 	closeEventMutex sync.Mutex
 	closeCallbacks  *list.List
 
+	createTime   time.Time
 	lastSendTime time.Time
 	lastRecvTime time.Time
 	// Put your session state here.
@@ -102,6 +103,7 @@ func NewSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, 
 		outBuffer:           newOutBuffer(),
 		closeChan:           make(chan int),
 		closeCallbacks:      list.New(),
+		createTime:          time.Now(),
 	}
 
 	defer func() {
@@ -147,6 +149,10 @@ func (session *Session) Close() {
 func (session *Session) GetLastSendTime() time.Time {
 	return session.lastSendTime
 }
+func (session *Session) GetCreateTime() time.Time {
+	return session.createTime
+}
+
 func (session *Session) GetLastRecvTime() time.Time {
 	return session.lastRecvTime
 }
