@@ -310,7 +310,7 @@ func (session *Session) AsyncSend(message Message, timeout time.Duration) AsyncW
 }
 
 // Async send a packet.
-func (session *Session) asyncSendBuffer(buffer *OutBuffer, timeout time.Duration) AsyncWork {
+func (session *Session) AsyncSendBuffer(buffer *OutBuffer, timeout time.Duration) AsyncWork {
 	c := make(chan error, 1)
 	if session.IsClosed() {
 		c <- SendToClosedError

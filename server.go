@@ -209,7 +209,7 @@ func (server *Server) copySessions() []*Session {
 }
 
 // Fetch sessions.
-func (server *Server) fetchSession(callback func(*Session)) {
+func (server *Server) fetchSession(callback func(SessionAble)) {
 	server.sessionMutex.Lock()
 	defer server.sessionMutex.Unlock()
 

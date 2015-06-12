@@ -26,4 +26,5 @@ type SessionAble interface {
 	GetLastSendTime() time.Time
 	GetCreateTime() time.Time
 	Close()
+	AsyncSendBuffer(buffer *OutBuffer, timeout time.Duration) AsyncWork
 }

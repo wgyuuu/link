@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/funny/link"
+	"github.com/0studio/link"
 	"time"
 )
 
@@ -27,7 +27,7 @@ func main() {
 
 	println("server start")
 
-	server.Serve(func(session *link.Session) {
+	server.Serve(func(session link.SessionAble) {
 		println("client", session.Conn().RemoteAddr().String(), "in")
 		channel.Join(session, nil)
 

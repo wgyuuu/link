@@ -39,6 +39,9 @@ func (message BytesMessage) MarshalTo(buffer []byte) (n int, err error) {
 	return
 
 }
+func String(str string) (m Message) {
+	return Bytes([]byte(str))
+}
 
 // // Convert to string message.
 // func String(v string) Message {

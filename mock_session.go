@@ -135,3 +135,6 @@ func (session *MockSession) PushToBuffer(message Message) error {
 func (session *MockSession) SendBufferedMessage(now time.Time) error {
 	return nil
 }
+func (session *MockSession) AsyncSendBuffer(buffer *OutBuffer, timeout time.Duration) (w AsyncWork) {
+	return
+}

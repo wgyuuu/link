@@ -372,6 +372,14 @@ func (out *OutBuffer) WriteUint64BE(v uint64) bool {
 	atomic.AddInt64(&out.pos, 8)
 	return true
 }
+func (out *OutBuffer) WriteString(s string) bool {
+	container := out.GetContainer()
+	if len(container) < 8 {
+		return false
+	}
+	copy(container, []byte(s))
+	return true
+}
 
 // func (out *OutBuffer) Write(p []byte) (int, error) {
 // 	out.Data = append(out.Data, p...)

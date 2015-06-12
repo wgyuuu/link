@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/funny/link"
+	"github.com/0studio/link"
+	"time"
 )
 
 var (
@@ -32,12 +33,12 @@ func main() {
 
 	println("server start:", server.Listener().Addr().String())
 
-	server.Serve(func(session *link.Session) {
+	server.Serve(func(session link.SessionAble) {
 		log("client", session.Conn().RemoteAddr().String(), "in")
 
 		session.Process(func(msg *link.InBuffer) error {
 			log("client", session.Conn().RemoteAddr().String(), "say:", string(msg.Data))
-			return session.Send(link.Bytes(msg.Data))
+			return session.Send(link.Bytes(msg.Data), time.Now())
 		})
 
 		log("client", session.Conn().RemoteAddr().String(), "close")

@@ -8,17 +8,17 @@ import (
 // Broadcaster.
 type Broadcaster struct {
 	protocol ProtocolState
-	fetcher  func(func(*Session))
+	fetcher  func(func(SessionAble))
 }
 
 // Broadcast work.
 type BroadcastWork struct {
-	Session *Session
+	Session SessionAble
 	AsyncWork
 }
 
 // Create a broadcaster.
-func NewBroadcaster(protocol ProtocolState, fetcher func(func(*Session))) *Broadcaster {
+func NewBroadcaster(protocol ProtocolState, fetcher func(func(SessionAble))) *Broadcaster {
 	return &Broadcaster{
 		protocol: protocol,
 		fetcher:  fetcher,
@@ -35,11 +35,11 @@ func (b *Broadcaster) Broadcast(message Message, timeout time.Duration) ([]Broad
 		return nil, err
 	}
 	works := make([]BroadcastWork, 0, 10)
-	b.fetcher(func(session *Session) {
+	b.fetcher(func(session SessionAble) {
 		// buffer.broadcastUse()
 		works = append(works, BroadcastWork{
 			session,
-			session.asyncSendBuffer(buffer, timeout),
+			session.AsyncSendBuffer(buffer, timeout),
 		})
 	})
 	return works, nil
@@ -57,7 +57,7 @@ type Channel struct {
 }
 
 type channelSession struct {
-	*Session
+	SessionAble
 	KickCallback func()
 }
 
@@ -86,7 +86,7 @@ func (channel *Channel) Len() int {
 }
 
 // Join the channel. The kickCallback will called when the session kick out from the channel.
-func (channel *Channel) Join(session *Session, kickCallback func()) {
+func (channel *Channel) Join(session SessionAble, kickCallback func()) {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -97,7 +97,7 @@ func (channel *Channel) Join(session *Session, kickCallback func()) {
 }
 
 // Exit the channel.
-func (channel *Channel) Exit(session *Session) {
+func (channel *Channel) Exit(session SessionAble) {
 	channel.mutex.Lock()
 	defer channel.mutex.Unlock()
 
@@ -119,11 +119,11 @@ func (channel *Channel) Kick(sessionId uint64) {
 }
 
 // Fetch the sessions. NOTE: Invoke Kick() or Exit() in fetch callback will dead lock.
-func (channel *Channel) Fetch(callback func(*Session)) {
+func (channel *Channel) Fetch(callback func(SessionAble)) {
 	channel.mutex.RLock()
 	defer channel.mutex.RUnlock()
 
 	for _, sesssion := range channel.sessions {
-		callback(sesssion.Session)
+		callback(sesssion.SessionAble)
 	}
 }

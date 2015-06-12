@@ -2,7 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/funny/link"
+	"github.com/0studio/link"
+	"time"
 )
 
 // This is an echo client demo work with the echo_server.
@@ -23,7 +24,7 @@ func main() {
 		if _, err := fmt.Scanf("%s\n", &input); err != nil {
 			break
 		}
-		client.Send(link.String(input))
+		client.Send(link.Bytes([]byte(input)), time.Now())
 	}
 
 	client.Close()
