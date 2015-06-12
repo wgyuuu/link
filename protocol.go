@@ -42,7 +42,8 @@ type Protocol interface {
 // Protocol state.
 type ProtocolState interface {
 	// Packet a message.
-	PrepareOutBuffer(buffer *OutBuffer, size int)
+	PrepareOutBuffer(buffer *OutBuffer, size int) error
+	PrepareData(buffer *OutBuffer, message Message) error
 
 	// Write a packet.
 	Write(writer io.Writer, buffer *OutBuffer) error
@@ -94,7 +95,7 @@ func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
 type simpleProtocol struct {
 	n             int
 	bo            binary.ByteOrder
-	encodeHead    func([]byte)
+	encodeHead    func(message Message, out *OutBuffer)
 	decodeHead    func([]byte) int
 	MaxPacketSize int
 }
@@ -113,29 +114,29 @@ func newSimpleProtocol(n int, byteOrder binary.ByteOrder) *simpleProtocol {
 
 	switch n {
 	case 1:
-		protocol.encodeHead = func(buffer []byte) {
-			buffer[0] = byte(len(buffer) - n)
+		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
+			buffer.WriteUint8(uint8(message.OutBufferSize()))
 		}
 		protocol.decodeHead = func(buffer []byte) int {
 			return int(buffer[0])
 		}
 	case 2:
-		protocol.encodeHead = func(buffer []byte) {
-			byteOrder.PutUint16(buffer, uint16(len(buffer)-n))
+		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
+			buffer.WriteUint16(uint16(message.OutBufferSize()), byteOrder)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
 			return int(byteOrder.Uint16(buffer))
 		}
 	case 4:
-		protocol.encodeHead = func(buffer []byte) {
-			byteOrder.PutUint32(buffer, uint32(len(buffer)-n))
+		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
+			buffer.WriteUint32(uint32(message.OutBufferSize()), byteOrder)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
 			return int(byteOrder.Uint32(buffer))
 		}
 	case 8:
-		protocol.encodeHead = func(buffer []byte) {
-			byteOrder.PutUint64(buffer, uint64(len(buffer)-n))
+		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
+			buffer.WriteUint64(uint64(message.OutBufferSize()), byteOrder)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
 			return int(byteOrder.Uint64(buffer))
@@ -151,16 +152,19 @@ func (p *simpleProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, erro
 	return p, nil
 }
 
-func (p *simpleProtocol) PrepareOutBuffer(buffer *OutBuffer, size int) {
-	buffer.Prepare(size)
-	buffer.Data = buffer.Data[:p.n]
+func (p *simpleProtocol) PrepareOutBuffer(buffer *OutBuffer, size int) error {
+	buffer.Prepare(p.n + size)
+	return nil
+}
+func (p *simpleProtocol) PrepareData(buffer *OutBuffer, message Message) error {
+	if p.MaxPacketSize > 0 && message.OutBufferSize() > p.MaxPacketSize {
+		return PacketTooLargeForWriteError
+	}
+	p.encodeHead(message, buffer)
+	return buffer.WriteMessage(p, message)
 }
 
 func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
-	if p.MaxPacketSize > 0 && len(packet.Data) > p.MaxPacketSize {
-		return PacketTooLargeForWriteError
-	}
-	p.encodeHead(packet.Data)
 	if _, err := writer.Write(packet.Data); err != nil {
 		return err
 	}

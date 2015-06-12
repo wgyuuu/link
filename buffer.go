@@ -2,6 +2,7 @@ package link
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"sync"
@@ -54,8 +55,6 @@ type InBuffer struct {
 	Data    []byte // Buffer data.
 	ReadPos int    // Read position.
 	isFreed bool
-	pool    *bufferPool
-	// next    unsafe.Pointer
 }
 
 func newInBufferObj() interface{} {
@@ -213,8 +212,7 @@ type OutBuffer struct {
 	isFreed     bool
 	isBroadcast bool
 	refCount    int32
-	pool        *bufferPool
-	// next        unsafe.Pointer
+	pos         int
 }
 
 func newOutBufferObj() interface{} {
@@ -228,6 +226,9 @@ func newOutBuffer() *OutBuffer {
 	return &OutBuffer{Data: make([]byte, 0, 1024)}
 }
 
+func newOutBufferWithDefaultCap(cap int) *OutBuffer {
+	return &OutBuffer{Data: make([]byte, 0, cap)}
+}
 func (out *OutBuffer) broadcastUse() {
 	if enableBufferPool {
 		atomic.AddInt32(&out.refCount, 1)
@@ -244,6 +245,7 @@ func (out *OutBuffer) broadcastFree() {
 
 func (out *OutBuffer) reset() {
 	out.Data = out.Data[0:0]
+	out.pos = 0
 }
 
 // Return the buffer to buffer pool.
@@ -261,128 +263,154 @@ func (out *OutBuffer) free() {
 // This method is for custom protocol only.
 // Don't use it in application logic.
 func (out *OutBuffer) Prepare(size int) {
-	if cap(out.Data) < size {
-		out.Data = make([]byte, 0, size)
+	if cap(out.Data)-out.pos < size {
+		data := make([]byte, out.pos+size, out.pos+size)
+		fmt.Println("outpos", out.pos, len(out.Data))
+		if out.pos > 0 && len(out.Data) > 0 {
+			copy(data, out.Data[0:out.pos])
+		}
+		out.Data = data
 	} else {
-		out.Data = out.Data[0:0]
+		out.Data = out.Data[0 : out.pos+size]
 	}
+	fmt.Printf("after_prepare out.pos=%d,len(data)=%d,cap(data)=%d\n", out.pos, len(out.Data), cap(out.Data))
+}
+func (out *OutBuffer) GetContainer() (data []byte) {
+	data = out.Data[out.pos:]
+	fmt.Println("container.len", len(data), out.pos, len(out.Data))
+	return
 }
 
-// Append some bytes into buffer.
-func (out *OutBuffer) Append(p ...byte) {
-	out.Data = append(out.Data, p...)
-}
-
-// Implement io.Writer interface.
-func (out *OutBuffer) Write(p []byte) (int, error) {
-	out.Data = append(out.Data, p...)
-	return len(p), nil
-}
-
-// Write a byte slice into buffer.
-func (out *OutBuffer) WriteBytes(d []byte) {
-	out.Append(d...)
-}
-
-// Write a string into buffer.
-func (out *OutBuffer) WriteString(s string) {
-	out.Append([]byte(s)...)
-}
-
-// Write a rune into buffer.
-func (out *OutBuffer) WriteRune(r rune) {
-	p := []byte{0, 0, 0, 0}
-	n := utf8.EncodeRune(p, r)
-	out.Append(p[:n]...)
+func (out *OutBuffer) WriteMessage(protocol ProtocolState, message Message) (err error) {
+	var n int
+	n, err = message.MarshalTo(out)
+	out.pos += n
+	return
 }
 
 // Write a uint8 value into buffer.
 func (out *OutBuffer) WriteUint8(v uint8) {
-	out.Append(byte(v))
+	out.GetContainer()[0] = byte(v)
+	out.pos++
+}
+
+func (out *OutBuffer) WriteUint16(v uint16, order binary.ByteOrder) {
+	order.PutUint16(out.GetContainer(), v)
+	out.pos += 2
 }
 
 // Write a uint16 value into buffer using little endian byte order.
 func (out *OutBuffer) WriteUint16LE(v uint16) {
-	out.Append(byte(v), byte(v>>8))
+	binary.LittleEndian.PutUint16(out.GetContainer(), v)
+	out.pos += 2
 }
 
 // Write a uint16 value into buffer using big endian byte order.
 func (out *OutBuffer) WriteUint16BE(v uint16) {
-	out.Append(byte(v>>8), byte(v))
+	binary.BigEndian.PutUint16(out.GetContainer(), v)
+	out.pos += 2
+}
+func (out *OutBuffer) WriteUint32(v uint32, order binary.ByteOrder) {
+	order.PutUint32(out.GetContainer(), v)
+	out.pos += 4
 }
 
 // Write a uint32 value into buffer using little endian byte order.
 func (out *OutBuffer) WriteUint32LE(v uint32) {
-	out.Append(byte(v), byte(v>>8), byte(v>>16), byte(v>>24))
+	binary.LittleEndian.PutUint32(out.GetContainer(), v)
+	out.pos += 4
 }
 
 // Write a uint32 value into buffer using big endian byte order.
 func (out *OutBuffer) WriteUint32BE(v uint32) {
-	out.Append(byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	binary.BigEndian.PutUint32(out.GetContainer(), v)
+	out.pos += 4
+}
+
+func (out *OutBuffer) WriteUint64(v uint64, order binary.ByteOrder) {
+	order.PutUint64(out.GetContainer(), v)
+	out.pos += 8
 }
 
 // Write a uint64 value into buffer using little endian byte order.
 func (out *OutBuffer) WriteUint64LE(v uint64) {
-	out.Append(
-		byte(v),
-		byte(v>>8),
-		byte(v>>16),
-		byte(v>>24),
-		byte(v>>32),
-		byte(v>>40),
-		byte(v>>48),
-		byte(v>>56),
-	)
+	binary.LittleEndian.PutUint64(out.GetContainer(), v)
+	out.pos += 8
 }
 
 // Write a uint64 value into buffer using big endian byte order.
 func (out *OutBuffer) WriteUint64BE(v uint64) {
-	out.Append(
-		byte(v>>56),
-		byte(v>>48),
-		byte(v>>40),
-		byte(v>>32),
-		byte(v>>24),
-		byte(v>>16),
-		byte(v>>8),
-		byte(v),
-	)
+	binary.BigEndian.PutUint64(out.GetContainer(), v)
+	out.pos += 8
 }
 
-// Write a float32 value into buffer using little endian byte order.
-func (out *OutBuffer) WriteFloat32LE(v float32) {
-	out.WriteUint32LE(math.Float32bits(v))
-}
+// func (out *OutBuffer) Write(p []byte) (int, error) {
+// 	out.Data = append(out.Data, p...)
+// 	return len(p), nil
+// }
 
-// Write a float32 value into buffer using big endian byte order.
-func (out *OutBuffer) WriteFloat32BE(v float32) {
-	out.WriteUint32BE(math.Float32bits(v))
-}
+// Append some bytes into buffer.
+// func (out *OutBuffer) Append(p ...byte) {
+// 	out.Data = append(out.Data, p...)
+// }
 
-// Write a float64 value into buffer using little endian byte order.
-func (out *OutBuffer) WriteFloat64LE(v float64) {
-	out.WriteUint64LE(math.Float64bits(v))
-}
+// // Implement io.Writer interface.
+// func (out *OutBuffer) Write(p []byte) (int, error) {
+// 	out.Data = append(out.Data, p...)
+// 	return len(p), nil
+// }
 
-// Write a float64 value into buffer using big endian byte order.
-func (out *OutBuffer) WriteFloat64BE(v float64) {
-	out.WriteUint64BE(math.Float64bits(v))
-}
+// // Write a byte slice into buffer.
+// func (out *OutBuffer) WriteBytes(d []byte) {
+// 	out.Append(d...)
+// }
 
-// Write a uint64 value into buffer.
-func (out *OutBuffer) WriteUvarint(v uint64) {
-	for v >= 0x80 {
-		out.Append(byte(v) | 0x80)
-		v >>= 7
-	}
-	out.Append(byte(v))
-}
+// // Write a string into buffer.
+// func (out *OutBuffer) WriteString(s string) {
+// 	out.Append([]byte(s)...)
+// }
 
-// Write a int64 value into buffer.
-func (out *OutBuffer) WriteVarint(v int64) {
-	ux := uint64(v) << 1
-	if v < 0 {
-		ux = ^ux
-	}
-	out.WriteUvarint(ux)
-}
+// // Write a rune into buffer.
+// func (out *OutBuffer) WriteRune(r rune) {
+// 	p := []byte{0, 0, 0, 0}
+// 	n := utf8.EncodeRune(p, r)
+// 	out.Append(p[:n]...)
+// }
+
+// // Write a float32 value into buffer using little endian byte order.
+// func (out *OutBuffer) WriteFloat32LE(v float32) {
+// 	out.WriteUint32LE(math.Float32bits(v))
+// }
+
+// // Write a float32 value into buffer using big endian byte order.
+// func (out *OutBuffer) WriteFloat32BE(v float32) {
+// 	out.WriteUint32BE(math.Float32bits(v))
+// }
+
+// // Write a float64 value into buffer using little endian byte order.
+// func (out *OutBuffer) WriteFloat64LE(v float64) {
+// 	out.WriteUint64LE(math.Float64bits(v))
+// }
+
+// // Write a float64 value into buffer using big endian byte order.
+// func (out *OutBuffer) WriteFloat64BE(v float64) {
+// 	out.WriteUint64BE(math.Float64bits(v))
+// }
+
+// // Write a uint64 value into buffer.
+// func (out *OutBuffer) WriteUvarint(v uint64) {
+// 	for v >= 0x80 {
+// 		out.Append(byte(v) | 0x80)
+// 		v >>= 7
+// 	}
+// 	out.Append(byte(v))
+// }
+
+// // Write a int64 value into buffer.
+// func (out *OutBuffer) WriteVarint(v int64) {
+// 	ux := uint64(v) << 1
+// 	if v < 0 {
+// 		ux = ^ux
+// 	}
+// 	out.WriteUvarint(ux)
+// }

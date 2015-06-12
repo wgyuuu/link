@@ -30,7 +30,8 @@ func NewBroadcaster(protocol ProtocolState, fetcher func(func(*Session))) *Broad
 func (b *Broadcaster) Broadcast(message Message, timeout time.Duration) ([]BroadcastWork, error) {
 	buffer := newOutBuffer()
 	b.protocol.PrepareOutBuffer(buffer, message.OutBufferSize())
-	if err := message.WriteOutBuffer(buffer); err != nil {
+
+	if err := b.protocol.PrepareData(buffer, message); err != nil {
 		buffer.free()
 		return nil, err
 	}

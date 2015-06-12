@@ -157,9 +157,9 @@ func (session *Session) GetLastRecvTime() time.Time {
 	return session.lastRecvTime
 }
 
-func (session *Session) SendBytes(data []byte, now time.Time) error {
-	return session.Send(Bytes(data), now)
-}
+// func (session *Session) SendBytes(data []byte, now time.Time) error {
+// 	return session.Send(Bytes(data), now)
+// }
 
 // Sync send a message. This method will block on IO.
 func (session *Session) Send(message Message, now time.Time) error {
@@ -171,7 +171,7 @@ func (session *Session) Send(message Message, now time.Time) error {
 	buffer := session.outBuffer
 	session.protocol.PrepareOutBuffer(buffer, message.OutBufferSize())
 
-	err = message.WriteOutBuffer(buffer)
+	err = session.protocol.PrepareData(buffer, message)
 	if err == nil {
 		err = session.sendBuffer(buffer)
 	}

@@ -89,10 +89,6 @@ func (session *MockSession) ReadPacket() (data []byte, err error) { // this is f
 	return
 }
 
-func (session *MockSession) SendBytes(data []byte, now time.Time) error {
-	return session.Send(Bytes(data), now)
-}
-
 func (session *MockSession) AddCloseCallback(handler interface{}, callback func()) {
 }
 func (session *MockSession) RemoveCloseCallback(handler interface{}) {

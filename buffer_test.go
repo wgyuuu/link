@@ -1,13 +1,40 @@
 package link
 
 import (
-	"bytes"
 	"github.com/funny/unitest"
 	"runtime"
 	"testing"
 )
 
-func Test_Buffer(t *testing.T) {
+func TestBufferPrepare(t *testing.T) {
+	var buffer = &OutBuffer{Data: make([]byte, 3, 3)}
+	buffer.Data[0] = 1
+	buffer.Data[1] = 2
+	buffer.Data[2] = 3
+	buffer.Prepare(1)
+
+	unitest.Pass(t, len(buffer.Data) == 4)
+	unitest.Pass(t, cap(buffer.Data) == 4)
+	unitest.Pass(t, buffer.Data[0] == 1)
+	unitest.Pass(t, buffer.Data[1] == 2)
+	unitest.Pass(t, buffer.Data[2] == 3)
+	unitest.Pass(t, buffer.Data[3] == 0)
+}
+
+func TestBufferPrepare2(t *testing.T) {
+	var buffer = &OutBuffer{Data: make([]byte, 1, 3)}
+	buffer.pos = 1
+	buffer.Data[0] = 1
+	buffer.Prepare(3)
+
+	unitest.Pass(t, len(buffer.Data) == 4)
+	unitest.Pass(t, cap(buffer.Data) == 4)
+	unitest.Pass(t, buffer.Data[0] == 1)
+	unitest.Pass(t, buffer.Data[1] == 0)
+	unitest.Pass(t, buffer.Data[2] == 0)
+	unitest.Pass(t, buffer.Data[3] == 0)
+}
+func TestBuffer(t *testing.T) {
 	var buffer = newOutBuffer()
 
 	PrepareBuffer(buffer)
@@ -15,24 +42,29 @@ func Test_Buffer(t *testing.T) {
 	VerifyBuffer(t, &InBuffer{Data: buffer.Data})
 }
 
+func TestBuffer2(t *testing.T) {
+	var buffer = newOutBufferWithDefaultCap(0)
+
+	PrepareBuffer(buffer)
+
+	VerifyBuffer(t, &InBuffer{Data: buffer.Data})
+}
+
 func PrepareBuffer(buffer *OutBuffer) {
+	buffer.Prepare(1)
 	buffer.WriteUint8(123)
+	buffer.Prepare(2)
 	buffer.WriteUint16LE(0xFFEE)
+	buffer.Prepare(2)
 	buffer.WriteUint16BE(0xFFEE)
+	buffer.Prepare(4)
 	buffer.WriteUint32LE(0xFFEEDDCC)
+	buffer.Prepare(4)
 	buffer.WriteUint32BE(0xFFEEDDCC)
+	buffer.Prepare(8)
 	buffer.WriteUint64LE(0xFFEEDDCCBBAA9988)
+	buffer.Prepare(8)
 	buffer.WriteUint64BE(0xFFEEDDCCBBAA9988)
-	buffer.WriteFloat32LE(88.01)
-	buffer.WriteFloat64LE(99.02)
-	buffer.WriteFloat32BE(88.01)
-	buffer.WriteFloat64BE(99.02)
-	buffer.WriteRune('好')
-	buffer.WriteString("Hello1")
-	buffer.WriteBytes([]byte("Hello2"))
-	buffer.WriteBytes([]byte("Hello3"))
-	buffer.WriteVarint(0x7FEEDDCCBBAA9988)
-	buffer.WriteUvarint(0xFFEEDDCCBBAA9988)
 }
 
 func VerifyBuffer(t *testing.T, buffer *InBuffer) {
@@ -43,16 +75,6 @@ func VerifyBuffer(t *testing.T, buffer *InBuffer) {
 	unitest.Pass(t, buffer.ReadUint32BE() == 0xFFEEDDCC)
 	unitest.Pass(t, buffer.ReadUint64LE() == 0xFFEEDDCCBBAA9988)
 	unitest.Pass(t, buffer.ReadUint64BE() == 0xFFEEDDCCBBAA9988)
-	unitest.Pass(t, buffer.ReadFloat32LE() == 88.01)
-	unitest.Pass(t, buffer.ReadFloat64LE() == 99.02)
-	unitest.Pass(t, buffer.ReadFloat32BE() == 88.01)
-	unitest.Pass(t, buffer.ReadFloat64BE() == 99.02)
-	unitest.Pass(t, buffer.ReadRune() == '好')
-	unitest.Pass(t, buffer.ReadString(6) == "Hello1")
-	unitest.Pass(t, bytes.Equal(buffer.ReadBytes(6), []byte("Hello2")))
-	unitest.Pass(t, bytes.Equal(buffer.Slice(6), []byte("Hello3")))
-	unitest.Pass(t, buffer.ReadVarint() == 0x7FEEDDCCBBAA9988)
-	unitest.Pass(t, buffer.ReadUvarint() == 0xFFEEDDCCBBAA9988)
 }
 
 func Benchmark_SetFinalizer1(b *testing.B) {
