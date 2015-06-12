@@ -129,3 +129,9 @@ func (session *MockSession) GetLastSendTime() time.Time {
 func (session *MockSession) GetCreateTime() time.Time {
 	return time.Now()
 }
+func (session *MockSession) PushToBuffer(message Message) error {
+	return nil
+}
+func (session *MockSession) SendBufferedMessage(now time.Time) error {
+	return nil
+}

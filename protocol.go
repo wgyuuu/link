@@ -42,8 +42,7 @@ type Protocol interface {
 // Protocol state.
 type ProtocolState interface {
 	// Packet a message.
-	PrepareOutBuffer(buffer *OutBuffer, size int) error
-	PrepareData(buffer *OutBuffer, message Message) error
+	WriteToBuffer(buffer *OutBuffer, message Message) error
 
 	// Write a packet.
 	Write(writer io.Writer, buffer *OutBuffer) error
@@ -115,31 +114,31 @@ func newSimpleProtocol(n int, byteOrder binary.ByteOrder) *simpleProtocol {
 	switch n {
 	case 1:
 		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
-			buffer.WriteUint8(uint8(message.OutBufferSize()))
+			buffer.WriteUint8(uint8(message.Size()))
 		}
 		protocol.decodeHead = func(buffer []byte) int {
 			return int(buffer[0])
 		}
 	case 2:
 		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
-			buffer.WriteUint16(uint16(message.OutBufferSize()), byteOrder)
+			buffer.WriteUint16(uint16(message.Size()), protocol.bo)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
-			return int(byteOrder.Uint16(buffer))
+			return int(protocol.bo.Uint16(buffer))
 		}
 	case 4:
 		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
-			buffer.WriteUint32(uint32(message.OutBufferSize()), byteOrder)
+			buffer.WriteUint32(uint32(message.Size()), protocol.bo)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
-			return int(byteOrder.Uint32(buffer))
+			return int(protocol.bo.Uint32(buffer))
 		}
 	case 8:
 		protocol.encodeHead = func(message Message, buffer *OutBuffer) {
-			buffer.WriteUint64(uint64(message.OutBufferSize()), byteOrder)
+			buffer.WriteUint64(uint64(message.Size()), protocol.bo)
 		}
 		protocol.decodeHead = func(buffer []byte) int {
-			return int(byteOrder.Uint64(buffer))
+			return int(protocol.bo.Uint64(buffer))
 		}
 	default:
 		panic("unsupported packet head size")
@@ -152,19 +151,20 @@ func (p *simpleProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, erro
 	return p, nil
 }
 
-func (p *simpleProtocol) PrepareOutBuffer(buffer *OutBuffer, size int) error {
-	buffer.Prepare(p.n + size)
-	return nil
-}
-func (p *simpleProtocol) PrepareData(buffer *OutBuffer, message Message) error {
-	if p.MaxPacketSize > 0 && message.OutBufferSize() > p.MaxPacketSize {
+func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error {
+	buffer.Prepare(p.n + message.Size())
+	if p.MaxPacketSize > 0 && message.Size() > p.MaxPacketSize {
 		return PacketTooLargeForWriteError
 	}
 	p.encodeHead(message, buffer)
-	return buffer.WriteMessage(p, message)
+	return buffer.WriteMessage(message)
 }
 
 func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
+	if len(packet.Data) == 0 {
+		return nil
+	}
+
 	if _, err := writer.Write(packet.Data); err != nil {
 		return err
 	}
@@ -185,10 +185,10 @@ func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 		return PacketTooLargeforReadError
 	}
 	// body
-	buffer.Prepare(size)
 	if size == 0 {
 		return nil
 	}
+	buffer.Prepare(size)
 	if _, err := io.ReadFull(reader, buffer.Data); err != nil {
 		return err
 	}

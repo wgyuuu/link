@@ -2,7 +2,6 @@ package link
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"math"
 	"sync"
@@ -11,63 +10,74 @@ import (
 )
 
 var (
-	enableBufferPool = true
-	globalPool       = newBufferPool()
+	globalPool         = newBufferPool()
+	DefaultInBuffSize  = 128
+	DefaultOutBuffSize = 512
 )
 
-// Turn On/Off buffer pool. Default is enable.
-func BufferPoolEnable(enable bool) {
-	enableBufferPool = enable
-}
-
 type bufferPool struct {
-	inPool  sync.Pool
-	outPool sync.Pool
+	inDataPool  sync.Pool
+	outDataPool sync.Pool
 }
 
 func newBufferPool() *bufferPool {
 	return &bufferPool{
-		inPool:  sync.Pool{New: newInBufferObj},
-		outPool: sync.Pool{New: newOutBufferObj},
+		outDataPool: sync.Pool{},
+		inDataPool:  sync.Pool{},
 	}
 }
 
-func (pool *bufferPool) GetInBuffer() (in *InBuffer) {
-	bufferObj := pool.inPool.Get()
-	return bufferObj.(*InBuffer)
+func (pool *bufferPool) PutOutDataBuffer(data []byte) {
+	pool.outDataPool.Put(data)
 }
 
-func (pool *bufferPool) GetOutBuffer() (out *OutBuffer) {
-	bufferObj := pool.outPool.Get()
-	return bufferObj.(*OutBuffer)
+func (pool *bufferPool) GetOutDataBuffer(size int) (data []byte) {
+	bufferObj := pool.outDataPool.Get()
+	if bufferObj == nil {
+		data = make([]byte, size, size)
+		return
+	}
+	bufferData := bufferObj.([]byte)
+	if cap(bufferData) >= size {
+		bufferData = bufferData[0:size]
+		return bufferData
+	}
+	pool.PutOutDataBuffer(bufferData) // put it back ,because it is not big enough
+
+	data = make([]byte, size, size)
+	return
+
+}
+func (pool *bufferPool) PutInDataBuffer(data []byte) {
+	pool.inDataPool.Put(data)
 }
 
-func (pool *bufferPool) PutInBuffer(in *InBuffer) {
-	pool.inPool.Put(in)
-}
+func (pool *bufferPool) GetInDataBuffer(size int) (data []byte) {
+	bufferObj := pool.inDataPool.Get()
+	if bufferObj == nil {
+		data = make([]byte, size, size)
+		return
+	}
+	bufferData := bufferObj.([]byte)
+	if cap(bufferData) >= size {
+		bufferData = bufferData[0:size]
+		return bufferData
+	}
+	pool.PutInDataBuffer(bufferData) // put it back ,because it is not big enough
 
-func (pool *bufferPool) PutOutBuffer(out *OutBuffer) {
-	pool.outPool.Put(out)
+	data = make([]byte, size, size)
+	return
+
 }
 
 // Incomming message buffer.
 type InBuffer struct {
 	Data    []byte // Buffer data.
 	ReadPos int    // Read position.
-	isFreed bool
-}
-
-func newInBufferObj() interface{} {
-	return &InBuffer{
-		Data: make([]byte, 0, 1024),
-	}
 }
 
 func newInBuffer() *InBuffer {
-	if enableBufferPool == true {
-		return globalPool.GetInBuffer()
-	}
-	return &InBuffer{Data: make([]byte, 0, 1024)}
+	return &InBuffer{Data: globalPool.GetInDataBuffer(DefaultInBuffSize)}
 }
 
 func (in *InBuffer) reset() {
@@ -75,23 +85,12 @@ func (in *InBuffer) reset() {
 	in.ReadPos = 0
 }
 
-// Return the buffer to buffer pool.
-func (in *InBuffer) free() {
-	if enableBufferPool {
-		if in.isFreed {
-			panic("link.InBuffer: double free")
-		}
-		in.reset()
-		globalPool.PutInBuffer(in)
-	}
-}
-
 // Prepare buffer for next message.
 // This method is for custom protocol only.
 // Dont' use it in application logic.
 func (in *InBuffer) Prepare(size int) {
 	if cap(in.Data) < size {
-		in.Data = make([]byte, size)
+		in.Data = globalPool.GetInDataBuffer(size)
 	} else {
 		in.Data = in.Data[0:size]
 	}
@@ -120,7 +119,7 @@ func (in *InBuffer) Read(b []byte) (int, error) {
 
 // Read some bytes from buffer.
 func (in *InBuffer) ReadBytes(n int) []byte {
-	x := make([]byte, n)
+	x := make([]byte, n, n)
 	copy(x, in.Slice(n))
 	return x
 }
@@ -208,140 +207,170 @@ func (in *InBuffer) ReadUvarint() uint64 {
 
 // Outgoing message buffer.
 type OutBuffer struct {
-	Data        []byte // Buffer data.
-	isFreed     bool
-	isBroadcast bool
-	refCount    int32
-	pos         int
-}
-
-func newOutBufferObj() interface{} {
-	return &OutBuffer{Data: make([]byte, 0, 1024)}
+	Data []byte // Buffer data.
+	pos  int64
 }
 
 func newOutBuffer() *OutBuffer {
-	if enableBufferPool == true {
-		return globalPool.GetOutBuffer()
-	}
-	return &OutBuffer{Data: make([]byte, 0, 1024)}
+	return &OutBuffer{Data: globalPool.GetOutDataBuffer(DefaultOutBuffSize)}
 }
 
 func newOutBufferWithDefaultCap(cap int) *OutBuffer {
 	return &OutBuffer{Data: make([]byte, 0, cap)}
 }
-func (out *OutBuffer) broadcastUse() {
-	if enableBufferPool {
-		atomic.AddInt32(&out.refCount, 1)
-	}
-}
-
-func (out *OutBuffer) broadcastFree() {
-	if enableBufferPool {
-		if out.isBroadcast && atomic.AddInt32(&out.refCount, -1) == 0 {
-			out.free()
-		}
-	}
-}
 
 func (out *OutBuffer) reset() {
 	out.Data = out.Data[0:0]
-	out.pos = 0
+	atomic.SwapInt64(&out.pos, 0)
 }
-
-// Return the buffer to buffer pool.
-func (out *OutBuffer) free() {
-	if enableBufferPool {
-		if out.isFreed {
-			panic("link.OutBuffer: double free")
-		}
-		out.reset()
-		globalPool.PutOutBuffer(out)
-	}
+func (out *OutBuffer) IsEmpty() bool {
+	pos := int(atomic.LoadInt64(&out.pos))
+	return len(out.Data)-pos <= 0
 }
 
 // Prepare for next message.
 // This method is for custom protocol only.
 // Don't use it in application logic.
 func (out *OutBuffer) Prepare(size int) {
-	if cap(out.Data)-out.pos < size {
-		data := make([]byte, out.pos+size, out.pos+size)
-		fmt.Println("outpos", out.pos, len(out.Data))
+	pos := int(atomic.LoadInt64(&out.pos))
+	if cap(out.Data)-pos < size {
+		data := globalPool.GetOutDataBuffer(pos + size)
 		if out.pos > 0 && len(out.Data) > 0 {
 			copy(data, out.Data[0:out.pos])
 		}
+		oldData := out.Data
+		globalPool.PutOutDataBuffer(oldData)
 		out.Data = data
 	} else {
-		out.Data = out.Data[0 : out.pos+size]
+		out.Data = out.Data[0 : pos+size]
 	}
-	fmt.Printf("after_prepare out.pos=%d,len(data)=%d,cap(data)=%d\n", out.pos, len(out.Data), cap(out.Data))
 }
 func (out *OutBuffer) GetContainer() (data []byte) {
 	data = out.Data[out.pos:]
-	fmt.Println("container.len", len(data), out.pos, len(out.Data))
 	return
 }
 
-func (out *OutBuffer) WriteMessage(protocol ProtocolState, message Message) (err error) {
+// 	you should call out.Prepare(message.Size()) first
+func (out *OutBuffer) WriteMessage(message Message) (err error) {
 	var n int
-	n, err = message.MarshalTo(out)
-	out.pos += n
+	n, err = message.MarshalTo(out.GetContainer())
+	atomic.AddInt64(&out.pos, int64(n))
 	return
 }
 
 // Write a uint8 value into buffer.
-func (out *OutBuffer) WriteUint8(v uint8) {
-	out.GetContainer()[0] = byte(v)
-	out.pos++
+func (out *OutBuffer) WriteUint8(v uint8) bool {
+	container := out.GetContainer()
+	if len(container) < 1 {
+		return false
+	}
+
+	container[0] = byte(v)
+	atomic.AddInt64(&out.pos, 1)
+	return true
 }
 
-func (out *OutBuffer) WriteUint16(v uint16, order binary.ByteOrder) {
+func (out *OutBuffer) WriteUint16(v uint16, order binary.ByteOrder) bool {
+	container := out.GetContainer()
+	if len(container) < 2 {
+		return false
+	}
+
 	order.PutUint16(out.GetContainer(), v)
-	out.pos += 2
+	atomic.AddInt64(&out.pos, 2)
+	return true
 }
 
 // Write a uint16 value into buffer using little endian byte order.
-func (out *OutBuffer) WriteUint16LE(v uint16) {
+func (out *OutBuffer) WriteUint16LE(v uint16) bool {
+	container := out.GetContainer()
+	if len(container) < 2 {
+		return false
+	}
+
 	binary.LittleEndian.PutUint16(out.GetContainer(), v)
-	out.pos += 2
+	atomic.AddInt64(&out.pos, 2)
+	return true
 }
 
 // Write a uint16 value into buffer using big endian byte order.
-func (out *OutBuffer) WriteUint16BE(v uint16) {
+func (out *OutBuffer) WriteUint16BE(v uint16) bool {
+	container := out.GetContainer()
+	if len(container) < 2 {
+		return false
+	}
+
 	binary.BigEndian.PutUint16(out.GetContainer(), v)
-	out.pos += 2
+	atomic.AddInt64(&out.pos, 2)
+	return true
 }
-func (out *OutBuffer) WriteUint32(v uint32, order binary.ByteOrder) {
+func (out *OutBuffer) WriteUint32(v uint32, order binary.ByteOrder) bool {
+	container := out.GetContainer()
+	if len(container) < 4 {
+		return false
+	}
 	order.PutUint32(out.GetContainer(), v)
-	out.pos += 4
+	atomic.AddInt64(&out.pos, 4)
+	return true
 }
 
 // Write a uint32 value into buffer using little endian byte order.
-func (out *OutBuffer) WriteUint32LE(v uint32) {
+func (out *OutBuffer) WriteUint32LE(v uint32) bool {
+	container := out.GetContainer()
+	if len(container) < 4 {
+		return false
+	}
+
 	binary.LittleEndian.PutUint32(out.GetContainer(), v)
-	out.pos += 4
+	atomic.AddInt64(&out.pos, 4)
+	return true
 }
 
 // Write a uint32 value into buffer using big endian byte order.
-func (out *OutBuffer) WriteUint32BE(v uint32) {
+func (out *OutBuffer) WriteUint32BE(v uint32) bool {
+	container := out.GetContainer()
+	if len(container) < 4 {
+		return false
+	}
+
 	binary.BigEndian.PutUint32(out.GetContainer(), v)
-	out.pos += 4
+	atomic.AddInt64(&out.pos, 4)
+	return true
 }
 
-func (out *OutBuffer) WriteUint64(v uint64, order binary.ByteOrder) {
+func (out *OutBuffer) WriteUint64(v uint64, order binary.ByteOrder) bool {
+	container := out.GetContainer()
+	if len(container) < 8 {
+		return false
+	}
+
 	order.PutUint64(out.GetContainer(), v)
-	out.pos += 8
+	atomic.AddInt64(&out.pos, 8)
+	return true
 }
 
 // Write a uint64 value into buffer using little endian byte order.
-func (out *OutBuffer) WriteUint64LE(v uint64) {
+func (out *OutBuffer) WriteUint64LE(v uint64) bool {
+	container := out.GetContainer()
+	if len(container) < 8 {
+		return false
+	}
+
 	binary.LittleEndian.PutUint64(out.GetContainer(), v)
-	out.pos += 8
+	atomic.AddInt64(&out.pos, 8)
+	return true
 }
 
 // Write a uint64 value into buffer using big endian byte order.
-func (out *OutBuffer) WriteUint64BE(v uint64) {
+func (out *OutBuffer) WriteUint64BE(v uint64) bool {
+	container := out.GetContainer()
+	if len(container) < 8 {
+		return false
+	}
+
 	binary.BigEndian.PutUint64(out.GetContainer(), v)
-	out.pos += 8
+	atomic.AddInt64(&out.pos, 8)
+	return true
 }
 
 // func (out *OutBuffer) Write(p []byte) (int, error) {

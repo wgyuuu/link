@@ -141,8 +141,8 @@ func (session *Session) Close() {
 
 		session.invokeCloseCallbacks()
 
-		session.inBuffer.free()
-		session.outBuffer.free()
+		session.inBuffer = nil
+		session.outBuffer = nil
 	}
 }
 
@@ -157,30 +157,35 @@ func (session *Session) GetLastRecvTime() time.Time {
 	return session.lastRecvTime
 }
 
-// func (session *Session) SendBytes(data []byte, now time.Time) error {
-// 	return session.Send(Bytes(data), now)
-// }
-
 // Sync send a message. This method will block on IO.
 func (session *Session) Send(message Message, now time.Time) error {
-	session.outBufferMutex.Lock()
-	defer session.outBufferMutex.Unlock()
-
-	var err error
-
-	buffer := session.outBuffer
-	session.protocol.PrepareOutBuffer(buffer, message.OutBufferSize())
-
-	err = session.protocol.PrepareData(buffer, message)
+	err := session.PushToBuffer(message)
 	if err == nil {
-		err = session.sendBuffer(buffer)
+		err = session.sendBuffer(session.outBuffer)
 	}
 
-	buffer.reset()
+	session.outBuffer.reset()
 	session.lastSendTime = now
 	return err
 }
+func (session *Session) SendBufferedMessage(now time.Time) error {
+	if session.outBuffer.IsEmpty() {
+		return nil
+	}
 
+	err := session.sendBuffer(session.outBuffer)
+
+	session.outBuffer.reset()
+	session.lastSendTime = now
+	return err
+
+}
+func (session *Session) PushToBuffer(message Message) error {
+	session.outBufferMutex.Lock()
+	defer session.outBufferMutex.Unlock()
+
+	return session.protocol.WriteToBuffer(session.outBuffer, message)
+}
 func (session *Session) sendBuffer(buffer *OutBuffer) error {
 	session.sendMutex.Lock()
 	defer session.sendMutex.Unlock()
@@ -215,7 +220,6 @@ func (session *Session) Process(decoder Decoder) error {
 			return err
 		}
 	}
-	return nil
 }
 
 func (session *Session) ReadPacket() (data []byte, err error) {
@@ -267,7 +271,7 @@ func (session *Session) sendLoop() {
 		select {
 		case buffer := <-session.asyncSendBufferChan:
 			buffer.C <- session.sendBuffer(buffer.B)
-			buffer.B.broadcastFree()
+			// buffer.B.broadcastFree()
 		case message := <-session.asyncSendChan:
 			message.C <- session.Send(message.M, time.Now())
 		case <-session.closeChan:
@@ -379,7 +383,7 @@ func (session *Session) invokeCloseCallbacks() {
 	}
 }
 
-func (session Session) GetState() (State interface{}) {
+func (session *Session) GetState() (State interface{}) {
 	// Get your session state here.
 	return session.State
 }

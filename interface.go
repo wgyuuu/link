@@ -14,6 +14,9 @@ type SessionAble interface {
 	Send(message Message, now time.Time) error
 	ReadPacket() (data []byte, err error) // this is for debug ,donot use this in product environment.
 
+	// push a message to buffer,call SendBufferedMessage to flush to client
+	PushToBuffer(message Message) error
+	SendBufferedMessage(now time.Time) error
 	// SendBytes(data []byte, now time.Time) error
 	Process(decoder Decoder) error
 

@@ -15,6 +15,7 @@ var (
 	PacketTooLargeforReadError  = errors.New("Packet too large for read")
 	PacketTooLargeForWriteError = errors.New("Packet too large for write")
 	AsyncSendTimeoutError       = errors.New("Async send timeout")
+	BufferSizeNotEnough         = errors.New("buffer_size_not_enough")
 )
 
 var (

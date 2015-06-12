@@ -1,24 +1,34 @@
 package link
 
 import (
-	"github.com/funny/unitest"
+	"github.com/stretchr/testify/assert"
 	"runtime"
 	"testing"
 )
 
 func TestBufferPrepare(t *testing.T) {
 	var buffer = &OutBuffer{Data: make([]byte, 3, 3)}
-	buffer.Data[0] = 1
-	buffer.Data[1] = 2
-	buffer.Data[2] = 3
+	buffer.Prepare(3)
+
+	assert.True(t, buffer.WriteUint8(1))
+	assert.True(t, buffer.WriteUint8(2))
+	assert.True(t, buffer.WriteUint8(3))
+
+	assert.True(t, len(buffer.Data) == 3)
+	assert.True(t, cap(buffer.Data) == 3)
 	buffer.Prepare(1)
 
-	unitest.Pass(t, len(buffer.Data) == 4)
-	unitest.Pass(t, cap(buffer.Data) == 4)
-	unitest.Pass(t, buffer.Data[0] == 1)
-	unitest.Pass(t, buffer.Data[1] == 2)
-	unitest.Pass(t, buffer.Data[2] == 3)
-	unitest.Pass(t, buffer.Data[3] == 0)
+	assert.True(t, len(buffer.Data) == 4)
+	assert.True(t, cap(buffer.Data) == 4)
+	assert.True(t, buffer.Data[0] == 1)
+	assert.True(t, buffer.Data[1] == 2)
+	assert.True(t, buffer.Data[2] == 3)
+	assert.True(t, buffer.Data[3] == 0)
+	assert.True(t, buffer.WriteUint8(4))
+	assert.True(t, buffer.Data[3] == 4)
+
+	assert.False(t, buffer.WriteUint8(3))
+
 }
 
 func TestBufferPrepare2(t *testing.T) {
@@ -27,12 +37,23 @@ func TestBufferPrepare2(t *testing.T) {
 	buffer.Data[0] = 1
 	buffer.Prepare(3)
 
-	unitest.Pass(t, len(buffer.Data) == 4)
-	unitest.Pass(t, cap(buffer.Data) == 4)
-	unitest.Pass(t, buffer.Data[0] == 1)
-	unitest.Pass(t, buffer.Data[1] == 0)
-	unitest.Pass(t, buffer.Data[2] == 0)
-	unitest.Pass(t, buffer.Data[3] == 0)
+	assert.True(t, len(buffer.Data) == 4)
+	assert.True(t, cap(buffer.Data) == 4)
+	assert.True(t, buffer.Data[0] == 1)
+	assert.True(t, buffer.Data[1] == 0)
+	assert.True(t, buffer.Data[2] == 0)
+	assert.True(t, buffer.Data[3] == 0)
+}
+
+func TestBufferWriteMessage(t *testing.T) {
+	byteMsg := Bytes([]byte{10, 20, 30})
+	var buffer = newOutBuffer()
+	buffer.Prepare(byteMsg.Size())
+	buffer.WriteMessage(byteMsg)
+	assert.Equal(t, 3, len(buffer.Data))
+	assert.Equal(t, byte(10), buffer.Data[0])
+	assert.Equal(t, byte(20), buffer.Data[1])
+	assert.Equal(t, byte(30), buffer.Data[2])
 }
 func TestBuffer(t *testing.T) {
 	var buffer = newOutBuffer()
@@ -68,13 +89,13 @@ func PrepareBuffer(buffer *OutBuffer) {
 }
 
 func VerifyBuffer(t *testing.T, buffer *InBuffer) {
-	unitest.Pass(t, buffer.ReadUint8() == 123)
-	unitest.Pass(t, buffer.ReadUint16LE() == 0xFFEE)
-	unitest.Pass(t, buffer.ReadUint16BE() == 0xFFEE)
-	unitest.Pass(t, buffer.ReadUint32LE() == 0xFFEEDDCC)
-	unitest.Pass(t, buffer.ReadUint32BE() == 0xFFEEDDCC)
-	unitest.Pass(t, buffer.ReadUint64LE() == 0xFFEEDDCCBBAA9988)
-	unitest.Pass(t, buffer.ReadUint64BE() == 0xFFEEDDCCBBAA9988)
+	assert.True(t, buffer.ReadUint8() == 123)
+	assert.True(t, buffer.ReadUint16LE() == 0xFFEE)
+	assert.True(t, buffer.ReadUint16BE() == 0xFFEE)
+	assert.True(t, buffer.ReadUint32LE() == 0xFFEEDDCC)
+	assert.True(t, buffer.ReadUint32BE() == 0xFFEEDDCC)
+	assert.True(t, buffer.ReadUint64LE() == 0xFFEEDDCCBBAA9988)
+	assert.True(t, buffer.ReadUint64BE() == 0xFFEEDDCCBBAA9988)
 }
 
 func Benchmark_SetFinalizer1(b *testing.B) {

@@ -1,39 +1,43 @@
 package link
 
 import (
-	// "encoding/gob"
-	// "encoding/json"
-	// "encoding/xml"
-	"errors"
+// "encoding/gob"
+// "encoding/json"
+// "encoding/xml"
 )
 
 type Message interface {
-	OutBufferSize() int
-	MarshalTo(buffer *OutBuffer) (n int, err error)
-	// WriteOutBuffer(*OutBuffer) error
+	Size() int
+	MarshalTo(dest []byte) (n int, err error)
+}
+
+// if you use protobuf , I suggest using  "github.com/gogo/protobuf/proto"
+// and it generate  a Size() and MarshalTo(data []byte) (n int, err error)
+// you can use it directly
+
+// do not use this , this is not effective ,(if you use Bytes()  you golang Data-------->[]byte-------->dataSize+[]byte)
+// if you write your Message then your directly                      golangData---------->dataSize+[]byte
+// Convert to bytes message.
+func Bytes(v []byte) (m Message) {
+	return BytesMessage{v}
 }
 
 type BytesMessage struct {
 	data []byte
 }
 
-func (message BytesMessage) OutBufferSize() int {
+func (message BytesMessage) Size() int {
 	return len(message.data)
 }
-func (message BytesMessage) MarshalTo(buffer *OutBuffer) (n int, err error) {
-	container := buffer.GetContainer()
-	if len(container) < len(message.data) {
-		return 0, errors.New("buffer_size_not_enough")
+func (message BytesMessage) MarshalTo(buffer []byte) (n int, err error) {
+	if len(buffer) < len(message.data) {
+		return 0, BufferSizeNotEnough
 	}
-	copy(container, message.data)
+	copy(buffer, message.data)
+
 	n = len(message.data)
 	return
 
-}
-
-// Convert to bytes message.
-func Bytes(v []byte) (m Message) {
-	return BytesMessage{v}
 }
 
 // // Convert to string message.

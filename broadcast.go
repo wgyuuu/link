@@ -29,16 +29,14 @@ func NewBroadcaster(protocol ProtocolState, fetcher func(func(*Session))) *Broad
 // so the performance is better than send message one by one.
 func (b *Broadcaster) Broadcast(message Message, timeout time.Duration) ([]BroadcastWork, error) {
 	buffer := newOutBuffer()
-	b.protocol.PrepareOutBuffer(buffer, message.OutBufferSize())
 
-	if err := b.protocol.PrepareData(buffer, message); err != nil {
-		buffer.free()
+	if err := b.protocol.WriteToBuffer(buffer, message); err != nil {
+		// buffer.free()
 		return nil, err
 	}
-	buffer.isBroadcast = true
 	works := make([]BroadcastWork, 0, 10)
 	b.fetcher(func(session *Session) {
-		buffer.broadcastUse()
+		// buffer.broadcastUse()
 		works = append(works, BroadcastWork{
 			session,
 			session.asyncSendBuffer(buffer, timeout),
