@@ -161,11 +161,11 @@ func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error
 }
 
 func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
-	if len(packet.Data) == 0 {
+	if len(packet.Data) == 0 || packet.pos == 0 {
 		return nil
 	}
 
-	if _, err := writer.Write(packet.Data); err != nil {
+	if _, err := writer.Write(packet.Data[0:packet.pos]); err != nil {
 		return err
 	}
 	return nil
