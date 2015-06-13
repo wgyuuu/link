@@ -85,6 +85,9 @@ func (session *MockSession) SyncSendPacket(packet []byte) error {
 func (session *MockSession) Send(message Message, now time.Time) error {
 	return nil
 }
+func (session *MockSession) SendBytes(data []byte, now time.Time) error {
+	return nil
+}
 func (session *MockSession) ReadPacket() (data []byte, err error) { // this is for debug ,donot use this in product environment.
 	return
 }

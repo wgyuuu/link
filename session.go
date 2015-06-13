@@ -157,6 +157,13 @@ func (session *Session) GetLastRecvTime() time.Time {
 	return session.lastRecvTime
 }
 
+// do not use this ,use session.Send(Message,time.Time) ,this is not effective
+//  pb->[]byte-> headerSize+[]byte
+// if you implements your Message interface ,it directly pb->headerSize+[]byte
+func (session *Session) SendBytes(data []byte, now time.Time) error {
+	return session.Send(Bytes(data), now)
+}
+
 // Sync send a message. This method will block on IO.
 func (session *Session) Send(message Message, now time.Time) error {
 	err := session.PushToBuffer(message)
