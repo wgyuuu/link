@@ -19,23 +19,21 @@ type Message interface {
 // if you write your Message then your directly                      golangData---------->dataSize+[]byte
 // Convert to bytes message.
 func Bytes(v []byte) (m Message) {
-	return BytesMessage{v}
+	return BytesMessage(v)
 }
 
-type BytesMessage struct {
-	data []byte
-}
+type BytesMessage []byte
 
 func (message BytesMessage) Size() int {
-	return len(message.data)
+	return len(message)
 }
 func (message BytesMessage) MarshalTo(buffer []byte) (n int, err error) {
-	if len(buffer) < len(message.data) {
+	if len(buffer) < len(message) {
 		return 0, BufferSizeNotEnough
 	}
-	copy(buffer, message.data)
+	copy(buffer, message)
 
-	n = len(message.data)
+	n = len(message)
 	return
 
 }
