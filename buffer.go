@@ -5,7 +5,6 @@ import (
 	"io"
 	"math"
 	"sync"
-	"sync/atomic"
 	"unicode/utf8"
 )
 
@@ -208,7 +207,7 @@ func (in *InBuffer) ReadUvarint() uint64 {
 // Outgoing message buffer.
 type OutBuffer struct {
 	Data []byte // Buffer data.
-	pos  int64
+	pos  int
 }
 
 func newOutBuffer() *OutBuffer {
@@ -220,19 +219,25 @@ func newOutBufferWithDefaultCap(cap int) *OutBuffer {
 }
 
 func (out *OutBuffer) reset() {
-	out.Data = out.Data[0:0]
-	atomic.SwapInt64(&out.pos, 0)
+	out.pos = 0
+	globalPool.PutOutDataBuffer(out.Data)
+	// out.Data = out.Data[0:0]
+	out.Data = nil
 }
 func (out *OutBuffer) IsEmpty() bool {
-	pos := int(atomic.LoadInt64(&out.pos))
-	return len(out.Data)-pos <= 0
+	return len(out.Data)-out.pos <= 0
 }
 
 // Prepare for next message.
 // This method is for custom protocol only.
 // Don't use it in application logic.
 func (out *OutBuffer) Prepare(size int) {
-	pos := int(atomic.LoadInt64(&out.pos))
+	if out.Data == nil {
+		out.Data = globalPool.GetOutDataBuffer(DefaultOutBuffSize)
+		out.pos = 0
+	}
+
+	pos := out.pos
 	if cap(out.Data)-pos < size {
 		data := globalPool.GetOutDataBuffer(pos + size)
 		if out.pos > 0 && len(out.Data) > 0 {
@@ -246,6 +251,11 @@ func (out *OutBuffer) Prepare(size int) {
 	}
 }
 func (out *OutBuffer) GetContainer() (data []byte) {
+	if out.Data == nil {
+		out.Data = globalPool.GetOutDataBuffer(DefaultOutBuffSize)
+		out.pos = 0
+	}
+
 	data = out.Data[out.pos:]
 	return
 }
@@ -254,7 +264,7 @@ func (out *OutBuffer) GetContainer() (data []byte) {
 func (out *OutBuffer) WriteMessage(message Message) (err error) {
 	var n int
 	n, err = message.MarshalTo(out.GetContainer())
-	atomic.AddInt64(&out.pos, int64(n))
+	out.pos += n
 	return
 }
 
@@ -266,7 +276,7 @@ func (out *OutBuffer) WriteUint8(v uint8) bool {
 	}
 
 	container[0] = byte(v)
-	atomic.AddInt64(&out.pos, 1)
+	out.pos += 1
 	return true
 }
 
@@ -277,7 +287,7 @@ func (out *OutBuffer) WriteUint16(v uint16, order binary.ByteOrder) bool {
 	}
 
 	order.PutUint16(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 2)
+	out.pos += 2
 	return true
 }
 
@@ -289,7 +299,7 @@ func (out *OutBuffer) WriteUint16LE(v uint16) bool {
 	}
 
 	binary.LittleEndian.PutUint16(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 2)
+	out.pos += 2
 	return true
 }
 
@@ -301,7 +311,7 @@ func (out *OutBuffer) WriteUint16BE(v uint16) bool {
 	}
 
 	binary.BigEndian.PutUint16(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 2)
+	out.pos += 2
 	return true
 }
 func (out *OutBuffer) WriteUint32(v uint32, order binary.ByteOrder) bool {
@@ -310,7 +320,7 @@ func (out *OutBuffer) WriteUint32(v uint32, order binary.ByteOrder) bool {
 		return false
 	}
 	order.PutUint32(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 4)
+	out.pos += 4
 	return true
 }
 
@@ -322,7 +332,7 @@ func (out *OutBuffer) WriteUint32LE(v uint32) bool {
 	}
 
 	binary.LittleEndian.PutUint32(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 4)
+	out.pos += 4
 	return true
 }
 
@@ -334,7 +344,7 @@ func (out *OutBuffer) WriteUint32BE(v uint32) bool {
 	}
 
 	binary.BigEndian.PutUint32(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 4)
+	out.pos += 4
 	return true
 }
 
@@ -345,7 +355,7 @@ func (out *OutBuffer) WriteUint64(v uint64, order binary.ByteOrder) bool {
 	}
 
 	order.PutUint64(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 8)
+	out.pos += 8
 	return true
 }
 
@@ -357,7 +367,7 @@ func (out *OutBuffer) WriteUint64LE(v uint64) bool {
 	}
 
 	binary.LittleEndian.PutUint64(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 8)
+	out.pos += 8
 	return true
 }
 
@@ -369,7 +379,7 @@ func (out *OutBuffer) WriteUint64BE(v uint64) bool {
 	}
 
 	binary.BigEndian.PutUint64(out.GetContainer(), v)
-	atomic.AddInt64(&out.pos, 8)
+	out.pos += 8
 	return true
 }
 func (out *OutBuffer) WriteString(s string) bool {

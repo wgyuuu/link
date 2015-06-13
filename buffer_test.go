@@ -6,6 +6,14 @@ import (
 	"testing"
 )
 
+func TestBufferPrepareAfterReset(t *testing.T) {
+	var buffer = &OutBuffer{Data: make([]byte, 3, 3)}
+	buffer.reset()
+	buffer.Prepare(1)
+	assert.True(t, buffer.WriteUint8(4))
+	assert.True(t, buffer.Data[0] == 4)
+	buffer.reset()
+}
 func TestBufferPrepare(t *testing.T) {
 	var buffer = &OutBuffer{Data: make([]byte, 3, 3)}
 	buffer.Prepare(3)
