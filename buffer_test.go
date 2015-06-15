@@ -26,16 +26,14 @@ func TestBufferPrepare(t *testing.T) {
 	assert.True(t, cap(buffer.Data) == 3)
 	buffer.Prepare(1)
 
-	assert.True(t, len(buffer.Data) == 4)
-	assert.True(t, cap(buffer.Data) == 4)
+	assert.Equal(t, len(buffer.Data), 4)
+	assert.True(t, cap(buffer.Data) == DefaultOutBuffSize)
 	assert.True(t, buffer.Data[0] == 1)
 	assert.True(t, buffer.Data[1] == 2)
 	assert.True(t, buffer.Data[2] == 3)
 	assert.True(t, buffer.Data[3] == 0)
 	assert.True(t, buffer.WriteUint8(4))
 	assert.True(t, buffer.Data[3] == 4)
-
-	assert.False(t, buffer.WriteUint8(3))
 
 }
 
@@ -46,7 +44,7 @@ func TestBufferPrepare2(t *testing.T) {
 	buffer.Prepare(3)
 
 	assert.True(t, len(buffer.Data) == 4)
-	assert.True(t, cap(buffer.Data) == 4)
+	assert.True(t, cap(buffer.Data) == DefaultOutBuffSize)
 	assert.True(t, buffer.Data[0] == 1)
 	assert.True(t, buffer.Data[1] == 0)
 	assert.True(t, buffer.Data[2] == 0)

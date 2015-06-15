@@ -2,101 +2,44 @@ package link
 
 import (
 	"encoding/binary"
+	"github.com/0studio/link/buffer"
 	"io"
 	"math"
-	"sync"
 	"unicode/utf8"
 )
 
 var (
-	globalPool         = newBufferPool()
 	DefaultInBuffSize  = 128
 	DefaultOutBuffSize = 128
+	globalPool         = newBufferPool(DefaultInBuffSize, DefaultOutBuffSize)
 )
 
 type bufferPool struct {
-	inDataPool        sync.Pool
-	outDataPool       sync.Pool
-	outBiggerDataPool sync.Pool
+	inBufferMgr  *buffer.BufferPoolMgr
+	outBufferMgr *buffer.BufferPoolMgr
 }
 
-func newBufferPool() *bufferPool {
+func newBufferPool(defaultInBufferSize, defaultOutBufferSize int) *bufferPool {
 	return &bufferPool{
-		outDataPool:       sync.Pool{},
-		outBiggerDataPool: sync.Pool{},
-		inDataPool:        sync.Pool{},
+		inBufferMgr:  buffer.NewBufferPoolMgr(defaultInBufferSize),
+		outBufferMgr: buffer.NewBufferPoolMgr(defaultOutBufferSize),
 	}
 }
 
 func (pool *bufferPool) PutOutDataBuffer(data []byte) {
-	if cap(data) > DefaultOutBuffSize {
-		pool.outBiggerDataPool.Put(data)
-	} else {
-		pool.outDataPool.Put(data)
-	}
+	pool.outBufferMgr.Put(data)
 
 }
 
-func (pool *bufferPool) getOutBiggerDataBuffer(size int) (data []byte) {
-	bufferObj := pool.outBiggerDataPool.Get()
-	if bufferObj == nil {
-		data = make([]byte, size, size)
-		return
-	}
-	bufferData := bufferObj.([]byte)
-	if cap(bufferData) >= size {
-		bufferData = bufferData[0:size]
-		return bufferData
-	}
-	pool.PutOutDataBuffer(bufferData) // put it back ,because it is not big enough
-	data = make([]byte, size, size)
-	return
-
-}
 func (pool *bufferPool) GetOutDataBuffer(size int) (data []byte) {
-	if size < DefaultOutBuffSize {
-		size = DefaultOutBuffSize
-	}
-
-	if size > DefaultOutBuffSize {
-		return pool.getOutBiggerDataBuffer(size)
-	}
-
-	bufferObj := pool.outDataPool.Get()
-	if bufferObj == nil {
-		data = make([]byte, size, size)
-		return
-	}
-	bufferData := bufferObj.([]byte)
-	if cap(bufferData) >= size {
-		bufferData = bufferData[0:size]
-		return bufferData
-	}
-	pool.PutOutDataBuffer(bufferData) // put it back ,because it is not big enough
-
-	data = make([]byte, size, size)
-	return
-
+	return pool.outBufferMgr.Get(size)
 }
 func (pool *bufferPool) PutInDataBuffer(data []byte) {
-	pool.inDataPool.Put(data)
+	pool.inBufferMgr.Put(data)
 }
 
 func (pool *bufferPool) GetInDataBuffer(size int) (data []byte) {
-	bufferObj := pool.inDataPool.Get()
-	if bufferObj == nil {
-		data = make([]byte, size, size)
-		return
-	}
-	bufferData := bufferObj.([]byte)
-	if cap(bufferData) >= size {
-		bufferData = bufferData[0:size]
-		return bufferData
-	}
-	pool.PutInDataBuffer(bufferData) // put it back ,because it is not big enough
-
-	data = make([]byte, size, size)
-	return
+	return pool.inBufferMgr.Get(size)
 
 }
 
@@ -111,8 +54,9 @@ func newInBuffer() *InBuffer {
 }
 
 func (in *InBuffer) reset() {
-	in.Data = in.Data[0:0]
 	in.ReadPos = 0
+	globalPool.PutInDataBuffer(in.Data)
+	in.Data = nil
 }
 
 // Prepare buffer for next message.
@@ -120,9 +64,18 @@ func (in *InBuffer) reset() {
 // Dont' use it in application logic.
 func (in *InBuffer) Prepare(size int) {
 	if cap(in.Data) < size {
+		if len(in.Data) != 0 {
+			globalPool.PutInDataBuffer(in.Data)
+		}
+
 		in.Data = globalPool.GetInDataBuffer(size)
+		if len(in.Data) != size {
+			in.Data = in.Data[0:size]
+		}
 	} else {
-		in.Data = in.Data[0:size]
+		if len(in.Data) != size {
+			in.Data = in.Data[0:size]
+		}
 	}
 }
 
