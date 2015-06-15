@@ -141,8 +141,8 @@ func (session *Session) Close() {
 
 		session.invokeCloseCallbacks()
 
-		session.inBuffer = nil
-		session.outBuffer = nil
+		// session.inBuffer = nil
+		// session.outBuffer = nil
 	}
 }
 
@@ -176,7 +176,7 @@ func (session *Session) Send(message Message, now time.Time) error {
 	return err
 }
 func (session *Session) SendBufferedMessage(now time.Time) error {
-	if session.outBuffer.IsEmpty() {
+	if session.outBuffer == nil || session.outBuffer.IsEmpty() {
 		return nil
 	}
 
