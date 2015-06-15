@@ -63,15 +63,16 @@ func (in *InBuffer) reset() {
 // This method is for custom protocol only.
 // Dont' use it in application logic.
 func (in *InBuffer) Prepare(size int) {
+	if in.Data == nil {
+		in.Data = globalPool.GetInDataBuffer(size)
+	}
+
 	if cap(in.Data) < size {
 		if len(in.Data) != 0 {
 			globalPool.PutInDataBuffer(in.Data)
 		}
 
 		in.Data = globalPool.GetInDataBuffer(size)
-		if len(in.Data) != size {
-			in.Data = in.Data[0:size]
-		}
 	} else {
 		if len(in.Data) != size {
 			in.Data = in.Data[0:size]
