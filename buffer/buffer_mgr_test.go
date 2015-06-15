@@ -36,4 +36,8 @@ func TestBuffer(t *testing.T) {
 	assert.Equal(t, len(data), 4*5+1)
 	assert.True(t, cap(data) >= 4*5+1)
 
+	data = pool.Get(4*10 + 1)
+	assert.Equal(t, len(data), 4*10+1)
+	assert.True(t, cap(data) >= 4*10+1)
+
 }

@@ -17,6 +17,7 @@ func NewBufferPoolMgr(defaultBufferSize int) *BufferPoolMgr {
 		defaultBufferSize: defaultBufferSize,
 		defaultPool:       sync.Pool{},
 		size5Pool:         sync.Pool{},
+		size10Pool:        sync.Pool{},
 		anyBiggerPool:     sync.Pool{},
 	}
 }
