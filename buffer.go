@@ -11,26 +11,57 @@ import (
 var (
 	globalPool         = newBufferPool()
 	DefaultInBuffSize  = 128
-	DefaultOutBuffSize = 512
+	DefaultOutBuffSize = 128
 )
 
 type bufferPool struct {
-	inDataPool  sync.Pool
-	outDataPool sync.Pool
+	inDataPool        sync.Pool
+	outDataPool       sync.Pool
+	outBiggerDataPool sync.Pool
 }
 
 func newBufferPool() *bufferPool {
 	return &bufferPool{
-		outDataPool: sync.Pool{},
-		inDataPool:  sync.Pool{},
+		outDataPool:       sync.Pool{},
+		outBiggerDataPool: sync.Pool{},
+		inDataPool:        sync.Pool{},
 	}
 }
 
 func (pool *bufferPool) PutOutDataBuffer(data []byte) {
-	pool.outDataPool.Put(data)
+	if cap(data) > DefaultOutBuffSize {
+		pool.outBiggerDataPool.Put(data)
+	} else {
+		pool.outDataPool.Put(data)
+	}
+
 }
 
+func (pool *bufferPool) getOutBiggerDataBuffer(size int) (data []byte) {
+	bufferObj := pool.outBiggerDataPool.Get()
+	if bufferObj == nil {
+		data = make([]byte, size, size)
+		return
+	}
+	bufferData := bufferObj.([]byte)
+	if cap(bufferData) >= size {
+		bufferData = bufferData[0:size]
+		return bufferData
+	}
+	pool.PutOutDataBuffer(bufferData) // put it back ,because it is not big enough
+	data = make([]byte, size, size)
+	return
+
+}
 func (pool *bufferPool) GetOutDataBuffer(size int) (data []byte) {
+	if size < DefaultOutBuffSize {
+		size = DefaultOutBuffSize
+	}
+
+	if size > DefaultOutBuffSize {
+		return pool.getOutBiggerDataBuffer(size)
+	}
+
 	bufferObj := pool.outDataPool.Get()
 	if bufferObj == nil {
 		data = make([]byte, size, size)
@@ -221,6 +252,7 @@ func newOutBufferWithDefaultCap(cap int) *OutBuffer {
 func (out *OutBuffer) reset() {
 	out.pos = 0
 	globalPool.PutOutDataBuffer(out.Data)
+
 	// out.Data = out.Data[0:0]
 	out.Data = nil
 }
@@ -233,11 +265,12 @@ func (out *OutBuffer) IsEmpty() bool {
 // Don't use it in application logic.
 func (out *OutBuffer) Prepare(size int) {
 	if out.Data == nil {
-		out.Data = globalPool.GetOutDataBuffer(DefaultOutBuffSize)
 		out.pos = 0
+		out.Data = globalPool.GetOutDataBuffer(size)
 	}
 
 	pos := out.pos
+
 	if cap(out.Data)-pos < size {
 		data := globalPool.GetOutDataBuffer(pos + size)
 		if out.pos > 0 && len(out.Data) > 0 {
