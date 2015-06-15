@@ -19,6 +19,10 @@ func NewBufferPoolMgr(defaultBufferSize int) *BufferPoolMgr {
 }
 
 func (pool *BufferPoolMgr) Put(data []byte) {
+	if data == nil || cap(data) == 0 {
+		return
+	}
+
 	if cap(data) > pool.defaultBufferSize {
 		pool.biggerPool.Put(data)
 	} else {
