@@ -152,8 +152,9 @@ func (p *simpleProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, erro
 }
 
 func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error {
-	buffer.Prepare(p.n + message.Size())
-	if p.MaxPacketSize > 0 && message.Size() > p.MaxPacketSize {
+	msgSize := message.Size()
+	buffer.Prepare(p.n + msgSize)
+	if p.MaxPacketSize > 0 && msgSize > p.MaxPacketSize {
 		return PacketTooLargeForWriteError
 	}
 	p.encodeHead(message, buffer)
