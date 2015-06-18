@@ -24,6 +24,7 @@ func log(v ...interface{}) {
 func main() {
 	flag.Parse()
 
+	link.DefaultProtocol = link.AuthPacketN(4, "1111222233334444", link.BigEndian, 13175046)
 	link.DefaultConnBufferSize = *buffersize
 
 	server, err := link.Listen("tcp", "127.0.0.1:10010")

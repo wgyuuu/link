@@ -2,91 +2,57 @@ package link
 
 import (
 	"encoding/binary"
+	"github.com/0studio/link/util"
 	"io"
+	"math/rand"
 )
 
 var (
-	BigEndian    = ByteOrder(binary.BigEndian)
-	LittleEndian = ByteOrder(binary.LittleEndian)
-
-	packet1BE = newSimpleProtocol(1, BigEndian)
-	packet1LE = newSimpleProtocol(1, LittleEndian)
-	packet2BE = newSimpleProtocol(2, BigEndian)
-	packet2LE = newSimpleProtocol(2, LittleEndian)
-	packet4BE = newSimpleProtocol(4, BigEndian)
-	packet4LE = newSimpleProtocol(4, LittleEndian)
-	packet8BE = newSimpleProtocol(8, BigEndian)
-	packet8LE = newSimpleProtocol(8, LittleEndian)
+	Auth_Version  uint32 = 1
+	Version_Len   int    = 4
+	Encrypt_Len   int    = 4
+	authPacket1BE        = newAuthProtocol(1, 12, BigEndian)
+	authPacket1LE        = newAuthProtocol(1, 12, LittleEndian)
+	authPacket2BE        = newAuthProtocol(2, 12, BigEndian)
+	authPacket2LE        = newAuthProtocol(2, 12, LittleEndian)
+	authPacket4BE        = newAuthProtocol(4, 12, BigEndian)
+	authPacket4LE        = newAuthProtocol(4, 12, LittleEndian)
+	authPacket8BE        = newAuthProtocol(8, 12, BigEndian)
+	authPacket8LE        = newAuthProtocol(8, 12, LittleEndian)
 )
-
-type ByteOrder binary.ByteOrder
-
-type ProtocolSide int
-
-const (
-	SERVER_SIDE ProtocolSide = 1
-	CLIENT_SIDE ProtocolSide = 2
-)
-
-// Packet protocol.
-type Protocol interface {
-	// Create protocol state.
-	// New(net.Conn) for session protocol state.
-	// New(*Server) for server protocol state.
-	// New(*Channel) for channel protocol state.
-	// If the protocol need handshake for connection initialization.
-	// Do it in Protocol.New() and returns nil and a error when handshake failed.
-	New(interface{}, ProtocolSide) (ProtocolState, error)
-	// test
-	DecodeAuth([]byte) int
-	EncodeAuth(*OutBuffer, Message)
-}
-
-// Protocol state.
-type ProtocolState interface {
-	// Packet a message.
-	WriteToBuffer(buffer *OutBuffer, message Message) error
-
-	// Write a packet.
-	Write(writer io.Writer, buffer *OutBuffer) error
-
-	// Read a packet.
-	Read(reader io.Reader, buffer *InBuffer) error
-}
 
 // Create a {packet, N} protocol.
 // The n means how many bytes of the packet header.
 // n must is 1、2、4 or 8.
-func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
+func AuthPacketN(n int, authKey string, byteOrder ByteOrder, MaxPacketSize int) Protocol {
 	switch n {
 	case 1:
 		switch byteOrder {
 		case BigEndian:
-
-			return packet1BE.setMaxPacketSize(MaxPacketSize)
+			return authPacket1BE.setMaxPacketSize(MaxPacketSize, authKey)
 		case LittleEndian:
-			return packet1LE.setMaxPacketSize(MaxPacketSize)
+			return authPacket1LE.setMaxPacketSize(MaxPacketSize, authKey)
 		}
 	case 2:
 		switch byteOrder {
 		case BigEndian:
-			return packet2BE.setMaxPacketSize(MaxPacketSize)
+			return authPacket2BE.setMaxPacketSize(MaxPacketSize, authKey)
 		case LittleEndian:
-			return packet2LE.setMaxPacketSize(MaxPacketSize)
+			return authPacket2LE.setMaxPacketSize(MaxPacketSize, authKey)
 		}
 	case 4:
 		switch byteOrder {
 		case BigEndian:
-			return packet4BE.setMaxPacketSize(MaxPacketSize)
+			return authPacket4BE.setMaxPacketSize(MaxPacketSize, authKey)
 		case LittleEndian:
-			return packet4LE.setMaxPacketSize(MaxPacketSize)
+			return authPacket4LE.setMaxPacketSize(MaxPacketSize, authKey)
 		}
 	case 8:
 		switch byteOrder {
 		case BigEndian:
-			return packet8BE.setMaxPacketSize(MaxPacketSize)
+			return authPacket8BE.setMaxPacketSize(MaxPacketSize, authKey)
 		case LittleEndian:
-			return packet8LE.setMaxPacketSize(MaxPacketSize)
+			return authPacket8LE.setMaxPacketSize(MaxPacketSize, authKey)
 		}
 	}
 	panic("unsupported packet head size")
@@ -94,23 +60,26 @@ func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
 
 // The packet spliting protocol like Erlang's {packet, N}.
 // Each packet has a fix length packet header to present packet length.
-type simpleProtocol struct {
+type authProtocol struct {
 	n             int
+	c             int
+	key           string
 	bo            binary.ByteOrder
 	encodeHead    func(message Message, out *OutBuffer)
 	decodeHead    func([]byte) int
 	MaxPacketSize int
 }
 
-func (p *simpleProtocol) setMaxPacketSize(MaxPacketSize int) *simpleProtocol {
+func (p *authProtocol) setMaxPacketSize(MaxPacketSize int, authKey string) *authProtocol {
 	p.MaxPacketSize = MaxPacketSize
+	p.key = authKey
 	return p
-
 }
 
-func newSimpleProtocol(n int, byteOrder binary.ByteOrder) *simpleProtocol {
-	protocol := &simpleProtocol{
+func newAuthProtocol(n, c int, byteOrder binary.ByteOrder) *authProtocol {
+	protocol := &authProtocol{
 		n:  n,
+		c:  c,
 		bo: byteOrder,
 	}
 
@@ -150,13 +119,13 @@ func newSimpleProtocol(n int, byteOrder binary.ByteOrder) *simpleProtocol {
 	return protocol
 }
 
-func (p *simpleProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, error) {
+func (p *authProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, error) {
 	return p, nil
 }
 
-func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error {
+func (p *authProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error {
 	msgSize := message.Size()
-	buffer.Prepare(p.n + msgSize)
+	buffer.Prepare(p.n + p.c + msgSize)
 	if p.MaxPacketSize > 0 && msgSize > p.MaxPacketSize {
 		return PacketTooLargeForWriteError
 	}
@@ -164,7 +133,7 @@ func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error
 	return buffer.WriteMessage(message)
 }
 
-func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
+func (p *authProtocol) Write(writer io.Writer, packet *OutBuffer) error {
 	if len(packet.Data) == 0 || packet.pos == 0 {
 		return nil
 	}
@@ -175,9 +144,9 @@ func (p *simpleProtocol) Write(writer io.Writer, packet *OutBuffer) error {
 	return nil
 }
 
-func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
+func (p *authProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 	// head
-	buffer.Prepare(p.n)
+	buffer.Prepare(p.n + p.c)
 	if _, err := io.ReadFull(reader, buffer.Data); err != nil {
 		return err
 	}
@@ -199,10 +168,31 @@ func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 	return nil
 }
 
-func (p *simpleProtocol) EncodeAuth(buffer *OutBuffer, message Message) {
-	p.encodeHead(message, buffer)
+func (p *authProtocol) DecodeAuth(bytes []byte) int {
+	if len(bytes) < (p.n + p.c) {
+		return 0
+	}
+	// check
+	decData := util.TeaEncrypt(string(bytes[:p.n+Version_Len]), p.key)
+	if string(bytes[len(bytes)-Encrypt_Len:]) != decData[:Encrypt_Len] {
+		return 0
+	}
+	// return size
+	sizeData := bytes[:p.n]
+	return p.decodeHead(sizeData)
 }
 
-func (p *simpleProtocol) DecodeAuth(bytes []byte) int {
-	return p.decodeHead(bytes)
+func (p *authProtocol) EncodeAuth(buffer *OutBuffer, message Message) {
+	encBuffer := newOutBufferWithDefaultCap(p.c + 4)
+	encBuffer.Prepare(p.c + 4)
+	p.encodeHead(message, encBuffer)
+	encBuffer.WriteUint32(Auth_Version, p.bo)
+
+	bytes := util.TeaEncrypt(string(encBuffer.GetData()), p.key)
+	encData := util.LenString(Encrypt_Len, bytes)
+
+	p.encodeHead(message, buffer)
+	buffer.WriteUint32(Auth_Version, p.bo)
+	buffer.WriteUint32(uint32(rand.Intn(message.Size())), p.bo)
+	buffer.WriteString(string(encData))
 }

@@ -247,6 +247,11 @@ func (out *OutBuffer) GetContainer() (data []byte) {
 	return
 }
 
+func (out *OutBuffer) GetData() (data []byte) {
+	data = out.Data[:out.pos]
+	return data
+}
+
 // 	you should call out.Prepare(message.Size()) first
 func (out *OutBuffer) WriteMessage(message Message) (err error) {
 	var n int
@@ -375,6 +380,7 @@ func (out *OutBuffer) WriteString(s string) bool {
 		return false
 	}
 	copy(container, []byte(s))
+	out.pos += len(s)
 	return true
 }
 

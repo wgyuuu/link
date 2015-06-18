@@ -10,6 +10,7 @@ import (
 // usage:
 //     go run echo_client/main.go
 func main() {
+	link.DefaultProtocol = link.AuthPacketN(4, "1111222233334444", link.BigEndian, 13175046)
 	client, err := link.Dial("tcp", "127.0.0.1:10010")
 	if err != nil {
 		panic(err)
