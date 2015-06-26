@@ -2,6 +2,7 @@ package link
 
 import (
 	"encoding/binary"
+	"fmt"
 	"github.com/0studio/link/util"
 	"io"
 	"math/rand"
@@ -10,6 +11,7 @@ import (
 var (
 	Auth_Version  uint32 = 1
 	Version_Len   int    = 4
+	Random_Len    int    = 4
 	Encrypt_Len   int    = 4
 	authPacket1BE        = newAuthProtocol(1, 12, BigEndian)
 	authPacket1LE        = newAuthProtocol(1, 12, LittleEndian)
@@ -173,8 +175,10 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 		return 0
 	}
 	// check
-	decData := util.TeaEncrypt(string(bytes[:p.n+Version_Len]), p.key)
+	decData := util.Md5Encrypt(string(bytes[:len(bytes)-Encrypt_Len]))
+	fmt.Println("================", bytes[len(bytes)-Encrypt_Len:], ">>>", []byte(decData[:Encrypt_Len]))
 	if string(bytes[len(bytes)-Encrypt_Len:]) != decData[:Encrypt_Len] {
+		fmt.Println("----------->>>>>>")
 		return 0
 	}
 	// return size
@@ -184,15 +188,15 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 
 func (p *authProtocol) EncodeAuth(buffer *OutBuffer, message Message) {
 	encBuffer := newOutBufferWithDefaultCap(p.c + 4)
-	encBuffer.Prepare(p.c + 4)
+	encBuffer.Prepare(p.c + Version_Len + Random_Len)
 	p.encodeHead(message, encBuffer)
 	encBuffer.WriteUint32(Auth_Version, p.bo)
+	encBuffer.WriteUint32(uint32(rand.Intn(message.Size())), p.bo)
 
-	bytes := util.TeaEncrypt(string(encBuffer.GetData()), p.key)
+	bytes := util.Md5Encrypt(string(encBuffer.GetData()))
 	encData := util.LenString(Encrypt_Len, bytes)
 
 	p.encodeHead(message, buffer)
-	buffer.WriteUint32(Auth_Version, p.bo)
-	buffer.WriteUint32(uint32(rand.Intn(message.Size())), p.bo)
+	buffer.WriteString(string(encBuffer.GetData()))
 	buffer.WriteString(string(encData))
 }
