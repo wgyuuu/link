@@ -2,7 +2,6 @@ package link
 
 import (
 	"encoding/binary"
-	"fmt"
 	"github.com/0studio/link/util"
 	"io"
 	"math/rand"
@@ -176,9 +175,7 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 	}
 	// check
 	decData := util.Md5Encrypt(string(bytes[:len(bytes)-Encrypt_Len]))
-	fmt.Println("================", bytes[len(bytes)-Encrypt_Len:], ">>>", []byte(decData[:Encrypt_Len]))
 	if string(bytes[len(bytes)-Encrypt_Len:]) != decData[:Encrypt_Len] {
-		fmt.Println("----------->>>>>>")
 		return 0
 	}
 	// return size
@@ -188,7 +185,7 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 
 func (p *authProtocol) EncodeAuth(buffer *OutBuffer, message Message) {
 	encBuffer := newOutBufferWithDefaultCap(p.c + 4)
-	encBuffer.Prepare(p.c + Version_Len + Random_Len)
+	encBuffer.Prepare(p.c)
 	p.encodeHead(message, encBuffer)
 	encBuffer.WriteUint32(Auth_Version, p.bo)
 	encBuffer.WriteUint32(uint32(rand.Intn(message.Size())), p.bo)
@@ -196,7 +193,6 @@ func (p *authProtocol) EncodeAuth(buffer *OutBuffer, message Message) {
 	bytes := util.Md5Encrypt(string(encBuffer.GetData()))
 	encData := util.LenString(Encrypt_Len, bytes)
 
-	p.encodeHead(message, buffer)
 	buffer.WriteString(string(encBuffer.GetData()))
 	buffer.WriteString(string(encData))
 }
