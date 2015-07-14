@@ -169,7 +169,10 @@ func (server *Server) Stop() bool {
 }
 
 func (server *Server) newSession(id uint64, conn net.Conn) *Session {
-	session, _ := newSession(id, getBufferConnFromPool(conn, server.ReadBufferSize), server.protocol, SERVER_SIDE, server.SendChanSize)
+	if server.ReadBufferSize > 0 {
+		conn = getBufferConnFromPool(conn, server.ReadBufferSize)
+	}
+	session, _ := newSession(id, conn, server.protocol, SERVER_SIDE, server.SendChanSize)
 	if session == nil {
 		return nil
 	}
