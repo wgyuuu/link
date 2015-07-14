@@ -169,7 +169,7 @@ func (server *Server) Stop() bool {
 }
 
 func (server *Server) newSession(id uint64, conn net.Conn) *Session {
-	session, _ := NewSession(id, conn, server.protocol, SERVER_SIDE, server.SendChanSize, server.ReadBufferSize)
+	session, _ := newSession(id, getBufferConnFromPool(conn, server.ReadBufferSize), server.protocol, SERVER_SIDE, server.SendChanSize)
 	if session == nil {
 		return nil
 	}
@@ -184,6 +184,7 @@ func (server *Server) putSession(session *Session) {
 
 	session.AddCloseCallback(server, func() {
 		server.delSession(session)
+		putBufferConnToPool(session.Conn())
 	})
 	server.sessions[session.id] = session
 	server.stopWait.Add(1)

@@ -1,7 +1,6 @@
 package link
 
 import (
-	"bufio"
 	"container/list"
 	"net"
 	"sync/atomic"
@@ -65,29 +64,15 @@ type Session struct {
 	State interface{}
 }
 
-// Buffered connection.
-type bufferConn struct {
-	net.Conn
-	reader *bufio.Reader
-}
-
-func newBufferConn(conn net.Conn, readBufferSize int) *bufferConn {
-	return &bufferConn{
-		conn,
-		bufio.NewReaderSize(conn, readBufferSize),
-	}
-}
-
-func (conn *bufferConn) Read(d []byte) (int, error) {
-	return conn.reader.Read(d)
-}
-
-// Create a new session instance.
 func NewSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, sendChanSize int, readBufferSize int) (*Session, error) {
 	if readBufferSize > 0 {
 		conn = newBufferConn(conn, readBufferSize)
 	}
+	return newSession(id, conn, protocol, side, sendChanSize)
+}
 
+// Create a new session instance.
+func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, sendChanSize int) (*Session, error) {
 	protocolState, err := protocol.New(conn, side)
 	if err != nil {
 		return nil, err
