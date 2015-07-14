@@ -48,8 +48,8 @@ type Session struct {
 	sendMutex           sync.Mutex
 	asyncSendChan       chan asyncMessage
 	asyncSendBufferChan chan asyncBuffer
-	inBuffer            *InBuffer
-	outBuffer           *OutBuffer
+	inBuffer            InBuffer
+	outBuffer           OutBuffer
 	outBufferMutex      sync.Mutex
 
 	// About session close
@@ -79,6 +79,7 @@ func newBufferConn(conn net.Conn, readBufferSize int) *bufferConn {
 }
 
 func (conn *bufferConn) Read(d []byte) (int, error) {
+	fmt.Println("conn.reader.Buffered()", conn.reader.Buffered())
 	return conn.reader.Read(d)
 }
 
@@ -168,7 +169,7 @@ func (session *Session) SendBytes(data []byte, now time.Time) error {
 func (session *Session) Send(message Message, now time.Time) error {
 	err := session.PushToBuffer(message)
 	if err == nil {
-		err = session.sendBuffer(session.outBuffer)
+		err = session.sendBuffer(&session.outBuffer)
 	}
 
 	session.outBuffer.reset()
@@ -176,11 +177,11 @@ func (session *Session) Send(message Message, now time.Time) error {
 	return err
 }
 func (session *Session) SendBufferedMessage(now time.Time) error {
-	if session.outBuffer == nil || session.outBuffer.IsEmpty() {
+	if session.outBuffer.IsEmpty() {
 		return nil
 	}
 
-	err := session.sendBuffer(session.outBuffer)
+	err := session.sendBuffer(&session.outBuffer)
 
 	session.outBuffer.reset()
 	session.lastSendTime = now
@@ -191,7 +192,7 @@ func (session *Session) PushToBuffer(message Message) error {
 	session.outBufferMutex.Lock()
 	defer session.outBufferMutex.Unlock()
 
-	return session.protocol.WriteToBuffer(session.outBuffer, message)
+	return session.protocol.WriteToBuffer(&session.outBuffer, message)
 }
 func (session *Session) sendBuffer(buffer *OutBuffer) error {
 	session.sendMutex.Lock()
@@ -205,17 +206,16 @@ func (session *Session) ProcessOnce(decoder Decoder) error {
 	session.readMutex.Lock()
 	defer session.readMutex.Unlock()
 
-	buffer := session.inBuffer
-	err := session.protocol.Read(session.conn, buffer)
+	err := session.protocol.Read(session.conn, &session.inBuffer)
 	if err != nil {
-		buffer.reset()
+		session.inBuffer.reset()
 		session.Close()
 		return err
 	}
 	session.lastRecvTime = time.Now()
 
-	err = decoder(buffer)
-	buffer.reset()
+	err = decoder(&session.inBuffer)
+	session.inBuffer.reset()
 
 	return nil
 }
@@ -235,19 +235,18 @@ func (session *Session) ReadPacket() (data []byte, err error) {
 	session.readMutex.Lock()
 	defer session.readMutex.Unlock()
 
-	buffer := session.inBuffer
-	err = session.protocol.Read(session.conn, buffer)
+	err = session.protocol.Read(session.conn, &session.inBuffer)
 	if err != nil {
-		buffer.reset()
+		session.inBuffer.reset()
 		session.Close()
 		return
 	}
 	session.lastRecvTime = time.Now()
 
 	// this is slow
-	data = make([]byte, len(buffer.Data))
-	copy(data, buffer.Data)
-	buffer.reset()
+	data = make([]byte, len(session.inBuffer.Data))
+	copy(data, session.inBuffer.Data)
+	session.inBuffer.reset()
 
 	return
 }

@@ -64,7 +64,7 @@ func TestBufferWriteMessage(t *testing.T) {
 func TestBuffer(t *testing.T) {
 	var buffer = newOutBuffer()
 
-	PrepareBuffer(buffer)
+	PrepareBuffer(&buffer)
 
 	VerifyBuffer(t, &InBuffer{Data: buffer.Data})
 }

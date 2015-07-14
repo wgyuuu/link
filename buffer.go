@@ -49,8 +49,8 @@ type InBuffer struct {
 	ReadPos int    // Read position.
 }
 
-func newInBuffer() *InBuffer {
-	return &InBuffer{Data: globalPool.GetInDataBuffer(DefaultInBuffSize)}
+func newInBuffer() InBuffer {
+	return InBuffer{Data: globalPool.GetInDataBuffer(DefaultInBuffSize)}
 }
 
 func (in *InBuffer) reset() {
@@ -195,8 +195,8 @@ type OutBuffer struct {
 	pos  int
 }
 
-func newOutBuffer() *OutBuffer {
-	return &OutBuffer{Data: globalPool.GetOutDataBuffer(DefaultOutBuffSize)}
+func newOutBuffer() OutBuffer {
+	return OutBuffer{Data: globalPool.GetOutDataBuffer(DefaultOutBuffSize)}
 }
 
 func newOutBufferWithDefaultCap(cap int) *OutBuffer {
