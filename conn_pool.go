@@ -2,7 +2,6 @@ package link
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"sync"
 )
@@ -29,10 +28,10 @@ var bufferConnPool sync.Pool
 func getBufferConnFromPool(conn net.Conn, readBufferSize int) (bc *bufferConn) {
 	obj := bufferConnPool.Get()
 	if obj == nil {
-		fmt.Println("getBufferConnFromPool_miss", conn.RemoteAddr().String())
+		// fmt.Println("getBufferConnFromPool_miss", conn.RemoteAddr().String())
 		return newBufferConn(conn, readBufferSize)
 	}
-	fmt.Println("getBufferConnFromPool_hit", conn.RemoteAddr().String())
+	// fmt.Println("getBufferConnFromPool_hit", conn.RemoteAddr().String())
 	bc = obj.(*bufferConn)
 	bc.reader.Reset(conn)
 	bc.Conn = conn
@@ -41,7 +40,7 @@ func getBufferConnFromPool(conn net.Conn, readBufferSize int) (bc *bufferConn) {
 
 func putBufferConnToPool(session *Session) {
 	if s, ok := session.Conn().(*bufferConn); ok {
-		fmt.Println("debug,putBufferConnToPool", session.Conn().RemoteAddr().String())
+		// fmt.Println("debug,putBufferConnToPool", session.Conn().RemoteAddr().String())
 		bufferConnPool.Put(s)
 		session.conn = s.Conn
 	}
