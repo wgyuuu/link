@@ -79,7 +79,6 @@ func newBufferConn(conn net.Conn, readBufferSize int) *bufferConn {
 }
 
 func (conn *bufferConn) Read(d []byte) (int, error) {
-	fmt.Println("conn.reader.Buffered()", conn.reader.Buffered())
 	return conn.reader.Read(d)
 }
 
