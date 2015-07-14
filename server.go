@@ -184,7 +184,7 @@ func (server *Server) putSession(session *Session) {
 
 	session.AddCloseCallback(server, func() {
 		server.delSession(session)
-		putBufferConnToPool(session.Conn())
+		putBufferConnToPool(session)
 	})
 	server.sessions[session.id] = session
 	server.stopWait.Add(1)
