@@ -57,36 +57,36 @@ type ProtocolState interface {
 // Create a {packet, N} protocol.
 // The n means how many bytes of the packet header.
 // n must is 1、2、4 or 8.
-func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
+func PacketN(n int, byteOrder ByteOrder, maxPacketReadSize, maxPacketWriteSize int) Protocol {
 	switch n {
 	case 1:
 		switch byteOrder {
 		case BigEndian:
 
-			return packet1BE.setMaxPacketSize(MaxPacketSize)
+			return packet1BE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		case LittleEndian:
-			return packet1LE.setMaxPacketSize(MaxPacketSize)
+			return packet1LE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		}
 	case 2:
 		switch byteOrder {
 		case BigEndian:
-			return packet2BE.setMaxPacketSize(MaxPacketSize)
+			return packet2BE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		case LittleEndian:
-			return packet2LE.setMaxPacketSize(MaxPacketSize)
+			return packet2LE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		}
 	case 4:
 		switch byteOrder {
 		case BigEndian:
-			return packet4BE.setMaxPacketSize(MaxPacketSize)
+			return packet4BE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		case LittleEndian:
-			return packet4LE.setMaxPacketSize(MaxPacketSize)
+			return packet4LE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		}
 	case 8:
 		switch byteOrder {
 		case BigEndian:
-			return packet8BE.setMaxPacketSize(MaxPacketSize)
+			return packet8BE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		case LittleEndian:
-			return packet8LE.setMaxPacketSize(MaxPacketSize)
+			return packet8LE.setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize)
 		}
 	}
 	panic("unsupported packet head size")
@@ -95,15 +95,17 @@ func PacketN(n int, byteOrder ByteOrder, MaxPacketSize int) Protocol {
 // The packet spliting protocol like Erlang's {packet, N}.
 // Each packet has a fix length packet header to present packet length.
 type simpleProtocol struct {
-	n             int
-	bo            binary.ByteOrder
-	encodeHead    func(message Message, out *OutBuffer)
-	decodeHead    func([]byte) int
-	MaxPacketSize int
+	n                  int
+	bo                 binary.ByteOrder
+	encodeHead         func(message Message, out *OutBuffer)
+	decodeHead         func([]byte) int
+	maxPacketReadSize  int
+	maxPacketWriteSize int
 }
 
-func (p *simpleProtocol) setMaxPacketSize(MaxPacketSize int) *simpleProtocol {
-	p.MaxPacketSize = MaxPacketSize
+func (p *simpleProtocol) setMaxPacketSize(maxPacketReadSize, maxPacketWriteSize int) *simpleProtocol {
+	p.maxPacketReadSize = maxPacketReadSize
+	p.maxPacketWriteSize = maxPacketWriteSize
 	return p
 
 }
@@ -157,7 +159,7 @@ func (p *simpleProtocol) New(v interface{}, _ ProtocolSide) (ProtocolState, erro
 func (p *simpleProtocol) WriteToBuffer(buffer *OutBuffer, message Message) error {
 	msgSize := message.Size()
 	buffer.Prepare(p.n + msgSize)
-	if p.MaxPacketSize > 0 && msgSize > p.MaxPacketSize {
+	if p.maxPacketWriteSize > 0 && msgSize > p.maxPacketWriteSize {
 		return PacketTooLargeForWriteError
 	}
 	p.EncodeAuth(buffer, message)
@@ -185,7 +187,7 @@ func (p *simpleProtocol) Read(reader io.Reader, buffer *InBuffer) error {
 		return PacketTooLargeforReadError
 	}
 	size := p.DecodeAuth(buffer.Data)
-	if p.MaxPacketSize > 0 && size > p.MaxPacketSize {
+	if p.maxPacketReadSize > 0 && size > p.maxPacketReadSize {
 		return PacketTooLargeforReadError
 	}
 	// body

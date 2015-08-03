@@ -19,10 +19,10 @@ var (
 )
 
 var (
-	DefaultSendChanSize   = 1                           // Default session send chan buffer size.
-	DefaultConnBufferSize = 1024                        // Default session read buffer size.
-	DefaultProtocol       = PacketN(4, LittleEndian, 0) // Default protocol for utility APIs.
-	DefaultMaxSessionCnt  = 0                           // 0 means no limit
+	DefaultSendChanSize   = 1                              // Default session send chan buffer size.
+	DefaultConnBufferSize = 1024                           // Default session read buffer size.
+	DefaultProtocol       = PacketN(4, LittleEndian, 0, 0) // Default protocol for utility APIs.
+	DefaultMaxSessionCnt  = 0                              // 0 means no limit
 )
 
 // The easy way to setup a server.
