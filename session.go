@@ -142,6 +142,15 @@ func (session *Session) GetLastRecvTime() time.Time {
 	return session.lastRecvTime
 }
 
+var zeroTime time.Time
+
+func (session *Session) SendNow(message Message) error {
+	return session.Send(message, time.Now())
+}
+func (session *Session) SendDefault(message Message) error {
+	return session.Send(message, zeroTime)
+}
+
 // do not use this ,use session.Send(Message,time.Time) ,this is not effective
 //  pb->[]byte-> headerSize+[]byte
 // if you implements your Message interface ,it directly pb->headerSize+[]byte

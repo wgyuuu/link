@@ -11,6 +11,8 @@ type SessionAble interface {
 	AddCloseCallback(handler interface{}, callback func())
 	RemoveCloseCallback(handler interface{})
 
+	SendDefault(message Message) error
+	SendNow(message Message) error
 	Send(message Message, now time.Time) error
 	SendBytes(data []byte, now time.Time) error //  this is not effective , please use  Send
 	ReadPacket() (data []byte, err error)       // this is for debug ,donot use this in product environment.

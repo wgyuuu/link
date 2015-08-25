@@ -141,3 +141,9 @@ func (session *MockSession) SendBufferedMessage(now time.Time) error {
 func (session *MockSession) AsyncSendBuffer(buffer *OutBuffer, timeout time.Duration) (w AsyncWork) {
 	return
 }
+func (session *MockSession) SendNow(message Message) error {
+	return session.Send(message, time.Now())
+}
+func (session *MockSession) SendDefault(message Message) error {
+	return session.Send(message, zeroTime)
+}
