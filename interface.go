@@ -14,8 +14,12 @@ type SessionAble interface {
 	SendDefault(message Message) error
 	SendNow(message Message) error
 	Send(message Message, now time.Time) error
+
+	SendBytesDefault(data []byte) error         //  this is not effective , please use  Send
+	SendBytesNow(data []byte) error             //  this is not effective , please use  Send
 	SendBytes(data []byte, now time.Time) error //  this is not effective , please use  Send
-	ReadPacket() (data []byte, err error)       // this is for debug ,donot use this in product environment.
+
+	ReadPacket() (data []byte, err error) // this is for debug ,donot use this in product environment.
 
 	// push a message to buffer,call SendBufferedMessage to flush to client
 	PushToBuffer(message Message) error

@@ -150,6 +150,13 @@ func (session *Session) SendNow(message Message) error {
 func (session *Session) SendDefault(message Message) error {
 	return session.Send(message, zeroTime)
 }
+func (session *Session) SendBytesDefault(data []byte) error {
+	return session.SendBytes(data, zeroTime)
+}
+
+func (session *Session) SendBytesNow(data []byte) error {
+	return session.SendBytes(data, time.Now())
+}
 
 // do not use this ,use session.Send(Message,time.Time) ,this is not effective
 //  pb->[]byte-> headerSize+[]byte

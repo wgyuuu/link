@@ -147,3 +147,10 @@ func (session *MockSession) SendNow(message Message) error {
 func (session *MockSession) SendDefault(message Message) error {
 	return session.Send(message, zeroTime)
 }
+func (session *MockSession) SendBytesDefault(data []byte) error {
+	return session.SendBytes(data, zeroTime)
+}
+
+func (session *MockSession) SendBytesNow(data []byte) error {
+	return session.SendBytes(data, time.Now())
+}
