@@ -154,7 +154,7 @@ func (server *Server) doServe(handler func(SessionAble)) error {
 		if server.Stop() {
 			return err
 		}
-		return nil
+		return err
 	}
 	if session == nil {
 		return nil
