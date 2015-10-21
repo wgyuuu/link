@@ -167,7 +167,10 @@ func (session *Session) SendBytes(data []byte, now time.Time) error {
 
 // Sync send a message. This method will block on IO.
 func (session *Session) Send(message Message, now time.Time) error {
-	err := session.PushToBuffer(message)
+	session.outBufferMutex.Lock()
+	defer session.outBufferMutex.Unlock()
+	err := session.protocol.WriteToBuffer(&session.outBuffer, message)
+
 	if err == nil {
 		err = session.sendBuffer(&session.outBuffer)
 	}
@@ -176,24 +179,7 @@ func (session *Session) Send(message Message, now time.Time) error {
 	session.lastSendTime = now
 	return err
 }
-func (session *Session) SendBufferedMessage(now time.Time) error {
-	if session.outBuffer.IsEmpty() {
-		return nil
-	}
 
-	err := session.sendBuffer(&session.outBuffer)
-
-	session.outBuffer.reset()
-	session.lastSendTime = now
-	return err
-
-}
-func (session *Session) PushToBuffer(message Message) error {
-	session.outBufferMutex.Lock()
-	defer session.outBufferMutex.Unlock()
-
-	return session.protocol.WriteToBuffer(&session.outBuffer, message)
-}
 func (session *Session) sendBuffer(buffer *OutBuffer) error {
 	session.sendMutex.Lock()
 	defer session.sendMutex.Unlock()
