@@ -19,10 +19,11 @@ var (
 )
 
 var (
-	DefaultSendChanSize   = 1                              // Default session send chan buffer size.
-	DefaultConnBufferSize = 1024                           // Default session read buffer size.
-	DefaultProtocol       = PacketN(4, LittleEndian, 0, 0) // Default protocol for utility APIs.
-	DefaultMaxSessionCnt  = 0                              // 0 means no limit
+	DefaultSendChanSize                           = 1                              // Default session send chan buffer size.
+	DefaultConnBufferSize                         = 1024                           // Default session read buffer size.
+	DefaultProtocol                               = PacketN(4, LittleEndian, 0, 0) // Default protocol for utility APIs.
+	DefaultMaxSessionCnt                          = 0                              // 0 means no limit
+	DefauntSessionTimeScheduler func(SessionAble) = nil
 )
 
 // The easy way to setup a server.
@@ -50,23 +51,25 @@ type Server struct {
 	stopFlag int32
 	stopWait sync.WaitGroup
 
-	SendChanSize   int         // Session send chan buffer size.
-	ReadBufferSize int         // Session read buffer size.
-	State          interface{} // server state.
-	isServing      int32       // if this is false ,when new conn coming ,close it directly
-	maxSessionCnt  int
+	SendChanSize         int         // Session send chan buffer size.
+	ReadBufferSize       int         // Session read buffer size.
+	State                interface{} // server state.
+	isServing            int32       // if this is false ,when new conn coming ,close it directly
+	maxSessionCnt        int
+	sessionTimeScheduler func(SessionAble)
 }
 
 // Create a server.
 func NewServer(listener net.Listener, protocol Protocol) *Server {
 	server := &Server{
-		listener:       listener,
-		protocol:       protocol,
-		sessions:       make(map[uint64]*Session),
-		SendChanSize:   DefaultSendChanSize,
-		ReadBufferSize: DefaultConnBufferSize,
-		isServing:      1,
-		maxSessionCnt:  DefaultMaxSessionCnt,
+		listener:             listener,
+		protocol:             protocol,
+		sessions:             make(map[uint64]*Session),
+		SendChanSize:         DefaultSendChanSize,
+		ReadBufferSize:       DefaultConnBufferSize,
+		isServing:            1,
+		maxSessionCnt:        DefaultMaxSessionCnt,
+		sessionTimeScheduler: DefauntSessionTimeScheduler,
 	}
 	protocolState, _ := protocol.New(server, SERVER_SIDE)
 	server.broadcaster = NewBroadcaster(protocolState, server.fetchSession)
@@ -180,7 +183,7 @@ func (server *Server) newSession(id uint64, conn net.Conn) *Session {
 	if server.ReadBufferSize > 0 {
 		conn = getBufferConnFromPool(conn, server.ReadBufferSize)
 	}
-	session, _ := newSession(id, conn, server.protocol, SERVER_SIDE, server.SendChanSize)
+	session, _ := newSession(id, conn, server.protocol, SERVER_SIDE, server.SendChanSize, server.sessionTimeScheduler)
 	if session == nil {
 		return nil
 	}

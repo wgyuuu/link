@@ -104,6 +104,6 @@ func MakeSureSessionGoroutineExit(t *testing.T) {
 
 	if n := bytes.Index(buff.Bytes(), []byte("sendLoop")); n >= 0 {
 		t.Log(buff.String())
-		t.Fatalf("Some session goroutine running")
+		t.Fatalf("Some session goroutine running %v %s", buff.Bytes(), string(buff.Bytes()))
 	}
 }

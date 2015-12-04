@@ -61,18 +61,19 @@ type Session struct {
 	lastSendTime time.Time
 	lastRecvTime time.Time
 	// Put your session state here.
-	State interface{}
+	State         interface{}
+	timeScheduler func(SessionAble)
 }
 
 func NewSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, sendChanSize int, readBufferSize int) (*Session, error) {
 	if readBufferSize > 0 {
 		conn = newBufferConn(conn, readBufferSize)
 	}
-	return newSession(id, conn, protocol, side, sendChanSize)
+	return newSession(id, conn, protocol, side, sendChanSize, nil)
 }
 
 // Create a new session instance.
-func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, sendChanSize int) (*Session, error) {
+func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, sendChanSize int, timeScheduler func(s SessionAble)) (*Session, error) {
 	protocolState, err := protocol.New(conn, side)
 	if err != nil {
 		return nil, err
@@ -89,6 +90,7 @@ func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, 
 		closeChan:           make(chan int),
 		closeCallbacks:      list.New(),
 		createTime:          time.Now(),
+		timeScheduler:       timeScheduler,
 	}
 
 	defer func() {
@@ -96,7 +98,11 @@ func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, 
 			fmt.Println("link.session.ERROR", e)
 		}
 	}()
-	go session.sendLoop()
+	if timeScheduler != nil {
+		go session.loopWithTimer()
+	} else {
+		go session.loop()
+	}
 
 	return session, nil
 }
@@ -258,7 +264,7 @@ type asyncBuffer struct {
 }
 
 // Loop and transport responses.
-func (session *Session) sendLoop() {
+func (session *Session) loop() {
 	for {
 		select {
 		case buffer := <-session.asyncSendBufferChan:
@@ -268,6 +274,23 @@ func (session *Session) sendLoop() {
 			message.C <- session.Send(message.M, time.Now())
 		case <-session.closeChan:
 			return
+		}
+	}
+}
+func (session *Session) loopWithTimer() {
+	for {
+		select {
+		case buffer := <-session.asyncSendBufferChan:
+			buffer.C <- session.sendBuffer(buffer.B)
+			// buffer.B.broadcastFree()
+		case message := <-session.asyncSendChan:
+			message.C <- session.Send(message.M, time.Now())
+		case <-session.closeChan:
+			return
+		case <-time.After(time.Second):
+			if session.timeScheduler != nil {
+				session.timeScheduler(session)
+			}
 		}
 	}
 }
