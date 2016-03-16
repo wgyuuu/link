@@ -1,9 +1,10 @@
 package link
 
 import (
-	"github.com/stretchr/testify/assert"
 	"runtime"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBufferPrepareAfterReset(t *testing.T) {
@@ -53,7 +54,7 @@ func TestBufferPrepare2(t *testing.T) {
 
 func TestBufferWriteMessage(t *testing.T) {
 	byteMsg := Bytes([]byte{10, 20, 30})
-	var buffer = newOutBuffer()
+	var buffer = NewOutBuffer()
 	buffer.Prepare(byteMsg.Size())
 	buffer.WriteMessage(byteMsg)
 	assert.Equal(t, 3, len(buffer.Data))
@@ -62,7 +63,7 @@ func TestBufferWriteMessage(t *testing.T) {
 	assert.Equal(t, byte(30), buffer.Data[2])
 }
 func TestBuffer(t *testing.T) {
-	var buffer = newOutBuffer()
+	var buffer = NewOutBuffer()
 
 	PrepareBuffer(&buffer)
 
@@ -70,7 +71,7 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestBuffer2(t *testing.T) {
-	var buffer = newOutBufferWithDefaultCap(0)
+	var buffer = NewOutBufferWithDefaultCap(0)
 
 	PrepareBuffer(buffer)
 

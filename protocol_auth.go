@@ -2,9 +2,10 @@ package link
 
 import (
 	"encoding/binary"
-	"github.com/0studio/link/util"
 	"io"
 	"math/rand"
+
+	"github.com/0studio/link/util"
 )
 
 var (
@@ -184,7 +185,7 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 }
 
 func (p *authProtocol) EncodeAuth(buffer *OutBuffer, message Message, msgSize int) {
-	encBuffer := newOutBufferWithDefaultCap(p.c + 4)
+	encBuffer := NewOutBufferWithDefaultCap(p.c + 4)
 	encBuffer.Prepare(p.c)
 	p.encodeHead(message, msgSize, encBuffer)
 	encBuffer.WriteUint32(Auth_Version, p.bo)

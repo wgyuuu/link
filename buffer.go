@@ -2,10 +2,11 @@ package link
 
 import (
 	"encoding/binary"
-	"github.com/0studio/link/buffer"
 	"io"
 	"math"
 	"unicode/utf8"
+
+	"github.com/0studio/link/buffer"
 )
 
 var (
@@ -49,7 +50,7 @@ type InBuffer struct {
 	ReadPos int    // Read position.
 }
 
-func newInBuffer() InBuffer {
+func NewInBuffer() InBuffer {
 	return InBuffer{Data: globalPool.GetInDataBuffer(DefaultInBuffSize)}
 }
 
@@ -195,11 +196,11 @@ type OutBuffer struct {
 	pos  int
 }
 
-func newOutBuffer() OutBuffer {
+func NewOutBuffer() OutBuffer {
 	return OutBuffer{Data: globalPool.GetOutDataBuffer(DefaultOutBuffSize)}
 }
 
-func newOutBufferWithDefaultCap(cap int) *OutBuffer {
+func NewOutBufferWithDefaultCap(cap int) *OutBuffer {
 	return &OutBuffer{Data: make([]byte, 0, cap)}
 }
 

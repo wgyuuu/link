@@ -85,8 +85,8 @@ func newSession(id uint64, conn net.Conn, protocol Protocol, side ProtocolSide, 
 		protocol:            protocolState,
 		asyncSendChan:       make(chan asyncMessage, sendChanSize),
 		asyncSendBufferChan: make(chan asyncBuffer, sendChanSize),
-		inBuffer:            newInBuffer(),
-		outBuffer:           newOutBuffer(),
+		inBuffer:            NewInBuffer(),
+		outBuffer:           NewOutBuffer(),
 		closeChan:           make(chan int),
 		closeCallbacks:      list.New(),
 		createTime:          time.Now(),
@@ -191,6 +191,7 @@ func (session *Session) sendBuffer(buffer *OutBuffer) error {
 	defer session.sendMutex.Unlock()
 
 	return session.protocol.Write(session.conn, buffer)
+
 }
 
 // Process one request.
