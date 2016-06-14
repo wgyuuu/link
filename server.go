@@ -23,6 +23,8 @@ var (
 	DefaultConnBufferSize                         = 1024                           // Default session read buffer size.
 	DefaultProtocol                               = PacketN(4, LittleEndian, 0, 0) // Default protocol for utility APIs.
 	DefaultMaxSessionCnt                          = 0                              // 0 means no limit
+	DefaultSessionId                              = 0                              // sessionId
+	DefaultSessionStep                            = 1                              // sessionId add
 	DefauntSessionTimeScheduler func(SessionAble) = nil
 )
 
@@ -44,6 +46,7 @@ type Server struct {
 
 	// About sessions
 	maxSessionId uint64
+	sessionStep  uint64
 	sessions     map[uint64]*Session
 	sessionMutex sync.Mutex
 
@@ -64,6 +67,8 @@ func NewServer(listener net.Listener, protocol Protocol) *Server {
 	server := &Server{
 		listener:             listener,
 		protocol:             protocol,
+		maxSessionId:         DefaultSessionId,
+		sessionStep:          DefaultSessionStep,
 		sessions:             make(map[uint64]*Session),
 		SendChanSize:         DefaultSendChanSize,
 		ReadBufferSize:       DefaultConnBufferSize,
@@ -127,7 +132,7 @@ func (server *Server) Accept() (*Session, error) {
 		}
 
 		session := server.newSession(
-			atomic.AddUint64(&server.maxSessionId, 1),
+			atomic.AddUint64(&server.maxSessionId, server.sessionStep),
 			conn,
 		)
 		if session != nil {
