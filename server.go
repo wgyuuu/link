@@ -23,9 +23,10 @@ var (
 	DefaultConnBufferSize                         = 1024                           // Default session read buffer size.
 	DefaultProtocol                               = PacketN(4, LittleEndian, 0, 0) // Default protocol for utility APIs.
 	DefaultMaxSessionCnt                          = 0                              // 0 means no limit
-	DefaultSessionId                              = 0                              // sessionId
-	DefaultSessionStep                            = 1                              // sessionId add
 	DefauntSessionTimeScheduler func(SessionAble) = nil
+
+	DefaultSessionId   uint64 = 0 // sessionId
+	DefaultSessionStep uint64 = 1 // sessionId add
 )
 
 // The easy way to setup a server.
