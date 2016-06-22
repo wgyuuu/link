@@ -175,8 +175,11 @@ func (p *authProtocol) DecodeAuth(bytes []byte) int {
 		return 0
 	}
 	// check
-	decData := util.Md5Encrypt(string(bytes[:len(bytes)-Encrypt_Len]))
-	if string(bytes[len(bytes)-Encrypt_Len:]) != decData[:Encrypt_Len] {
+	data := string(bytes[:len(bytes)-Encrypt_Len])
+	encrtptString := string(bytes[len(bytes)-Encrypt_Len:])
+	if md5String := util.Md5Encrypt(data); md5String[:Encrypt_Len] == encrtptString {
+	} else if hexmd5String := util.HexMd5Encrypt(data); hexmd5String[:Encrypt_Len] == encrtptString {
+	} else { // 验证失败
 		return 0
 	}
 	// return size
