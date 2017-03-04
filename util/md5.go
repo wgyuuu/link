@@ -12,7 +12,6 @@ func Md5Encrypt(in string) string {
 	return string(bytes)
 }
 
-
 func HexMd5Encrypt(in string) string {
 	md5Ctx := md5.New()
 	md5Ctx.Write([]byte(in))

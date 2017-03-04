@@ -4,7 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/funny/link"
-	"github.com/funny/sync"
+	sync
 	"net"
 	"time"
 )
